@@ -19,6 +19,7 @@ export const accounts = sqliteTable("accounts", {
 
 export const api_keys = sqliteTable("api_keys", {
   id: text("id").primaryKey(),
+  key: text("key").notNull(),
   key_hash: text("key_hash").notNull().unique(),
   key_prefix: text("key_prefix").notNull(),
   name: text("name").notNull(),

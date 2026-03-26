@@ -3,7 +3,7 @@ import { config } from '../config'
 import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatus } from '../account'
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
-import { createApiKey, listApiKeys, revokeApiKey } from '../auth'
+import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus } from '../auth'
 import { getOverview, getStats, getTimeSeries, getRequestLog } from '../stats'
 import { getPoolStatus } from '../account/pool'
 import type { StatsParams, TimeSeriesParams, RequestLogParams } from '../stats'
@@ -124,8 +124,18 @@ adminApp.post('/keys', async (c) => {
   return c.json(result, 201)
 })
 
+adminApp.patch('/keys/:id', async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json<{ status: 'active' | 'disabled' }>()
+  if (body.status !== 'active' && body.status !== 'disabled') {
+    return c.json({ error: 'status must be active or disabled' }, 400)
+  }
+  await setApiKeyStatus(id, body.status)
+  return c.body(null, 204)
+})
+
 adminApp.delete('/keys/:id', async (c) => {
-  await revokeApiKey(c.req.param('id'))
+  await deleteApiKey(c.req.param('id'))
   return c.body(null, 204)
 })
 
@@ -139,23 +149,25 @@ adminApp.get('/keys/:id/opencode-config', async (c) => {
 
   const host = c.req.header('host')
   const baseURL = host ? `http://${host}/v1` : `http://localhost:${config.port}/v1`
-  const displayKey = `${key.key_prefix}...`
 
-  const configObj = {
+  const opencodeJson = {
     provider: {
-      'copilot-router': {
-        options: {
-          baseURL,
-          apiKey: displayKey,
-        },
+      'github-copilot': {
+        options: { baseURL },
       },
     },
   }
 
+  const authJson = {
+    'github-copilot': {
+      type: 'api',
+      key: key.key,
+    },
+  }
+
   return c.json({
-    config: configObj,
-    copyText: JSON.stringify(configObj, null, 2),
-    note: 'The full API key was only shown at creation time. Copy the key from when you created it.',
+    opencodeJsonText: JSON.stringify(opencodeJson, null, 2),
+    authJsonText: JSON.stringify(authJson, null, 2),
   })
 })
 

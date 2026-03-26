@@ -20,6 +20,7 @@ export async function createApiKey(name: string) {
 
   await db.insert(api_keys).values({
     id,
+    key,
     key_hash,
     key_prefix,
     name,
@@ -35,6 +36,7 @@ export async function listApiKeys() {
   const keys = await db
     .select({
       id: api_keys.id,
+      key: api_keys.key,
       key_prefix: api_keys.key_prefix,
       name: api_keys.name,
       status: api_keys.status,
@@ -47,8 +49,12 @@ export async function listApiKeys() {
   return keys
 }
 
-export async function revokeApiKey(id: string) {
-  await db.update(api_keys).set({ status: "revoked" }).where(eq(api_keys.id, id))
+export async function setApiKeyStatus(id: string, status: "active" | "disabled") {
+  await db.update(api_keys).set({ status }).where(eq(api_keys.id, id))
+}
+
+export async function deleteApiKey(id: string) {
+  await db.delete(api_keys).where(eq(api_keys.id, id))
 }
 
 export async function validateApiKey(key: string) {
