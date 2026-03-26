@@ -169,8 +169,8 @@
                         <p class="text-3xl font-bold text-gray-900" x-text="stats.today_requests?.toLocaleString() || '0'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Premium Requests</h3>
-                        <p class="text-3xl font-bold text-gray-900" x-text="stats.total_premium_requests?.toLocaleString() || '0'"></p>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Today's Errors</h3>
+                        <p class="text-3xl font-bold text-gray-900" x-text="stats.error_requests?.toLocaleString() || '0'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-sm font-medium text-gray-500 mb-1">Active Accounts</h3>
@@ -209,10 +209,6 @@
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">Active</td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.active || '0'"></td>
-                            </tr>
-                            <tr>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-yellow-600">Exhausted</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.exhausted || '0'"></td>
                             </tr>
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">Error</td>
@@ -265,12 +261,11 @@
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                              :class="{
-                                                  'bg-green-100 text-green-800': account.status === 'active',
-                                                  'bg-gray-100 text-gray-800': account.status === 'disabled',
-                                                  'bg-yellow-100 text-yellow-800': account.status === 'exhausted',
-                                                  'bg-red-100 text-red-800': account.status === 'error'
-                                              }"
+                                          :class="{
+                                                   'bg-green-100 text-green-800': account.status === 'active',
+                                                   'bg-gray-100 text-gray-800': account.status === 'disabled',
+                                                   'bg-red-100 text-red-800': account.status === 'error'
+                                               }"
                                               x-text="account.status">
                                         </span>
                                         <div x-show="account.error_msg" class="text-xs text-red-500 mt-1 truncate max-w-xs" :title="account.error_msg" x-text="account.error_msg"></div>
@@ -564,12 +559,11 @@
                                 <template x-for="item in items" :key="item.id">
                                     <tr class="hover:bg-gray-50">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatTime(item.created_at)"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500" x-text="item.api_key_id ? item.api_key_id.substring(0, 8) + '...' : '-'"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="item.account_id ? item.account_id.substring(0, 8) + '...' : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500" x-text="item.api_key_name || '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="item.account_name || '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                             <div class="flex items-center gap-2">
                                                 <span x-text="item.model"></span>
-                                                <span x-show="item.is_premium" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 uppercase tracking-wide">Premium</span>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="item.endpoint"></td>
@@ -990,14 +984,6 @@
                                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                         fill: true,
                                         tension: 0.4
-                                    },
-                                    {
-                                        label: 'Premium Requests',
-                                        data: this.trendData.map(d => d.premium_count),
-                                        borderColor: '#f97316',
-                                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-                                        fill: true,
-                                        tension: 0.4
                                     }
                                 ]
                             },
@@ -1005,7 +991,7 @@
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 interaction: { mode: 'index', intersect: false },
-                                plugins: { legend: { position: 'top' } },
+                                plugins: { legend: { display: false } },
                                 scales: { y: { beginAtZero: true } }
                             }
                         });
@@ -1054,7 +1040,7 @@
                         _charts.accounts = new Chart(accountsCtx, {
                             type: 'bar',
                             data: {
-                                labels: this.accountData.map(d => d.label ? d.label.substring(0, 12) + '...' : 'Unknown'),
+                                labels: this.accountData.map(d => d.label || 'Unknown'),
                                 datasets: [{
                                     label: 'Requests',
                                     data: this.accountData.map(d => d.count),
@@ -1071,7 +1057,7 @@
                         _charts.keys = new Chart(keysCtx, {
                             type: 'bar',
                             data: {
-                                labels: this.keyData.map(d => d.label ? d.label.substring(0, 8) + '...' : 'Unknown'),
+                                labels: this.keyData.map(d => d.label || 'Unknown'),
                                 datasets: [{
                                     label: 'Requests',
                                     data: this.keyData.map(d => d.count),

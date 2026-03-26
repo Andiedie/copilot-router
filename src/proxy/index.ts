@@ -1,10 +1,5 @@
 import type { Context } from "hono"
-import {
-  markAccountError,
-  markAccountExhausted,
-  selectAccount,
-  selectFallbackAccount,
-} from "../account/pool"
+import { selectAccount } from "../account/pool"
 import { getToken } from "../account/token"
 import { config } from "../config"
 import { buildUpstreamHeaders } from "./headers"
@@ -98,11 +93,10 @@ export async function proxyHandler(c: Context) {
   ;(c as any).set("proxyAccount", account)
   ;(c as any).set("proxyStatus", upstreamRes.status)
 
-  const rlRemaining = upstreamRes.headers.get("x-ratelimit-remaining")
-  const rlLimit = upstreamRes.headers.get("x-ratelimit-limit")
-  const rlReset = upstreamRes.headers.get("x-ratelimit-reset")
-
   if (apiKey) {
+    const rlRemaining = upstreamRes.headers.get("x-ratelimit-remaining")
+    const rlLimit = upstreamRes.headers.get("x-ratelimit-limit")
+    const rlReset = upstreamRes.headers.get("x-ratelimit-reset")
     logRequest({
       apiKeyId: apiKey.id,
       accountId: account.id,
@@ -114,56 +108,6 @@ export async function proxyHandler(c: Context) {
       ratelimitLimit: rlLimit !== null ? parseInt(rlLimit, 10) : null,
       ratelimitReset: rlReset !== null ? parseInt(rlReset, 10) : null,
     })
-  }
-
-  if (upstreamRes.status === 429 || upstreamRes.status === 401 || upstreamRes.status === 403) {
-    if (upstreamRes.status === 429) {
-      await markAccountExhausted(account.id)
-    } else {
-      await markAccountError(account.id, `Upstream returned ${upstreamRes.status}`)
-    }
-
-    const fallback = await selectFallbackAccount(account.id)
-    if (fallback) {
-      const fallbackJwt = await getToken(fallback.id)
-      if (fallbackJwt) {
-        const fallbackHeaders = buildUpstreamHeaders(c.req.raw.headers, fallbackJwt)
-        const retryRes = await fetch(upstreamUrl, {
-          method: c.req.method,
-          headers: fallbackHeaders,
-          body: hasBody ? bodyText : undefined,
-          // @ts-ignore duplex is required by some runtimes for streamed request body
-          duplex: "half",
-        })
-
-        ;(c as any).set("proxyAccount", fallback)
-        ;(c as any).set("proxyStatus", retryRes.status)
-
-        if (apiKey) {
-          const retryRlRemaining = retryRes.headers.get("x-ratelimit-remaining")
-          const retryRlLimit = retryRes.headers.get("x-ratelimit-limit")
-          const retryRlReset = retryRes.headers.get("x-ratelimit-reset")
-
-          logRequest({
-            apiKeyId: apiKey.id,
-            accountId: fallback.id,
-            model,
-            endpoint,
-            statusCode: retryRes.status,
-            durationMs,
-            ratelimitRemaining:
-              retryRlRemaining !== null ? parseInt(retryRlRemaining, 10) : null,
-            ratelimitLimit: retryRlLimit !== null ? parseInt(retryRlLimit, 10) : null,
-            ratelimitReset: retryRlReset !== null ? parseInt(retryRlReset, 10) : null,
-          })
-        }
-
-        return new Response(retryRes.body, {
-          status: retryRes.status,
-          headers: buildSafeResponseHeaders(retryRes.headers),
-        })
-      }
-    }
   }
 
   return new Response(upstreamRes.body, {

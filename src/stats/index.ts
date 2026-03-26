@@ -4,10 +4,10 @@ import { db } from "../db"
 export interface OverviewResult {
   total_requests: number
   today_requests: number
+  error_requests: number
   active_accounts: number
   total_accounts: number
   active_keys: number
-  total_premium_requests: number
   quota_usage_pct: number
 }
 
@@ -24,7 +24,6 @@ export interface StatsParams {
 export interface StatsRow {
   label: string
   count: number
-  premium_count: number
 }
 
 export interface TimeSeriesParams {
@@ -40,7 +39,6 @@ export interface TimeSeriesParams {
 export interface TimeSeriesRow {
   time: string
   count: number
-  premium_count: number
 }
 
 export interface RequestLogParams {
@@ -55,13 +53,12 @@ export interface RequestLogParams {
 export interface RequestLogResult {
   items: Array<{
     id: string
-    api_key_id: string
-    account_id: string | null
+    api_key_name: string | null
+    account_name: string | null
     model: string | null
     endpoint: string | null
     status_code: number | null
     duration_ms: number | null
-    is_premium: number
     ratelimit_remaining: number | null
     ratelimit_limit: number | null
     error: string | null
@@ -131,12 +128,12 @@ export async function getOverview(): Promise<OverviewResult> {
   const [reqStats] = db.all<{
     total_requests: number
     today_requests: number
-    total_premium_requests: number
+    error_requests: number
   }>(sql`
     SELECT
       COUNT(*) as total_requests,
       SUM(CASE WHEN created_at >= ${todayStart} THEN 1 ELSE 0 END) as today_requests,
-      SUM(CASE WHEN is_premium = 1 THEN 1 ELSE 0 END) as total_premium_requests
+      SUM(CASE WHEN status_code >= 400 AND created_at >= ${todayStart} THEN 1 ELSE 0 END) as error_requests
     FROM requests
   `)
 
@@ -162,10 +159,10 @@ export async function getOverview(): Promise<OverviewResult> {
   return {
     total_requests: reqStats?.total_requests ?? 0,
     today_requests: reqStats?.today_requests ?? 0,
+    error_requests: reqStats?.error_requests ?? 0,
     active_accounts: accStats?.active_accounts ?? 0,
     total_accounts: accStats?.total_accounts ?? 0,
     active_keys: keyStats?.active_keys ?? 0,
-    total_premium_requests: reqStats?.total_premium_requests ?? 0,
     quota_usage_pct: Math.round((accStats?.quota_usage_pct ?? 0) * 100) / 100,
   }
 }
@@ -184,7 +181,7 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
       groupExpr = 'r.model'
       break
     case 'api_key':
-      selectExpr = `COALESCE(k.key_prefix, r.api_key_id) as label`
+      selectExpr = `COALESCE(k.name, r.api_key_id) as label`
       joinClause = 'LEFT JOIN api_keys k ON k.id = r.api_key_id'
       groupExpr = 'r.api_key_id'
       break
@@ -214,8 +211,7 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
   const query = `
     SELECT
       ${selectExpr},
-      COUNT(*) as count,
-      SUM(CASE WHEN r.is_premium = 1 THEN 1 ELSE 0 END) as premium_count
+      COUNT(*) as count
     FROM requests r
     ${joinClause}
     ${where}
@@ -223,12 +219,11 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
     ORDER BY count DESC
   `
 
-  const rows = db.all<{ label: string; count: number; premium_count: number }>(sql.raw(query))
+  const rows = db.all<{ label: string; count: number }>(sql.raw(query))
 
   return rows.map(r => ({
     label: String(r.label ?? 'unknown'),
     count: r.count ?? 0,
-    premium_count: r.premium_count ?? 0,
   }))
 }
 
@@ -243,20 +238,18 @@ export async function getTimeSeries(params: TimeSeriesParams): Promise<TimeSerie
   const query = `
     SELECT
       ${fmt} as time,
-      COUNT(*) as count,
-      SUM(CASE WHEN r.is_premium = 1 THEN 1 ELSE 0 END) as premium_count
+      COUNT(*) as count
     FROM requests r
     ${where}
     GROUP BY time
     ORDER BY time ASC
   `
 
-  const rows = db.all<{ time: string; count: number; premium_count: number }>(sql.raw(query))
+  const rows = db.all<{ time: string; count: number }>(sql.raw(query))
 
   return rows.map(r => ({
     time: r.time,
     count: r.count ?? 0,
-    premium_count: r.premium_count ?? 0,
   }))
 }
 
@@ -278,10 +271,15 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
 
   const dataQuery = `
     SELECT
-      r.id, r.api_key_id, r.account_id, r.model, r.endpoint,
-      r.status_code, r.duration_ms, r.is_premium,
+      r.id,
+      k.name as api_key_name,
+      a.name as account_name,
+      r.model, r.endpoint,
+      r.status_code, r.duration_ms,
       r.ratelimit_remaining, r.ratelimit_limit, r.error, r.created_at
     FROM requests r
+    LEFT JOIN api_keys k ON k.id = r.api_key_id
+    LEFT JOIN accounts a ON a.id = r.account_id
     ${where}
     ORDER BY r.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
@@ -289,13 +287,12 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
 
   const items = db.all<{
     id: string
-    api_key_id: string
-    account_id: string | null
+    api_key_name: string | null
+    account_name: string | null
     model: string | null
     endpoint: string | null
     status_code: number | null
     duration_ms: number | null
-    is_premium: number
     ratelimit_remaining: number | null
     ratelimit_limit: number | null
     error: string | null

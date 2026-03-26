@@ -1,5 +1,4 @@
-import { getActiveAccounts, setAccountStatus } from './index'
-import { clearTokenCache } from './token'
+import { getActiveAccounts } from './index'
 
 let rrCounter = 0
 
@@ -27,32 +26,6 @@ export async function selectAccount() {
   return selected
 }
 
-export async function selectFallbackAccount(excludeId: string) {
-  const active = await getActiveAccounts()
-  const others = active.filter(a => a.id !== excludeId)
-  if (others.length === 0) return null
-
-  const sorted = [...others].sort((a, b) => {
-    const remA = a.quota_limit > 0 ? (a.quota_limit - a.quota_used) : 9999
-    const remB = b.quota_limit > 0 ? (b.quota_limit - b.quota_used) : 9999
-    return remB - remA
-  })
-
-  const selected = sorted[rrCounter % sorted.length]
-  rrCounter++
-  return selected
-}
-
-export async function markAccountExhausted(id: string) {
-  await setAccountStatus(id, 'exhausted')
-  clearTokenCache(id)
-}
-
-export async function markAccountError(id: string, error: string) {
-  await setAccountStatus(id, 'error', error)
-  clearTokenCache(id)
-}
-
 export async function getPoolStatus() {
   const { db } = await import('../db')
   const { accounts } = await import('../db/schema')
@@ -64,7 +37,6 @@ export async function getPoolStatus() {
     total: all.length,
     active: all.filter(a => a.status === 'active').length,
     disabled: all.filter(a => a.status === 'disabled').length,
-    exhausted: all.filter(a => a.status === 'exhausted').length,
     error: all.filter(a => a.status === 'error').length,
   }
 }

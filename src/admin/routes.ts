@@ -71,7 +71,7 @@ adminApp.get('/accounts/:id', async (c) => {
 
 adminApp.patch('/accounts/:id', async (c) => {
   const id = c.req.param('id')
-  const body = await c.req.json<{ name?: string; auto_disable_threshold?: number; status?: 'active' | 'disabled' }>()
+  const body = await c.req.json<{ name?: string; status?: 'active' | 'disabled' }>()
   if (body.status !== undefined) {
     if (body.status !== 'active' && body.status !== 'disabled') {
       return c.json({ error: 'Invalid status. Use active or disabled.' }, 400)

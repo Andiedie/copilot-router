@@ -8,7 +8,6 @@ CREATE TABLE `accounts` (
 	`quota_limit` integer DEFAULT 0 NOT NULL,
 	`quota_used` integer DEFAULT 0 NOT NULL,
 	`quota_reset_at` integer,
-	`auto_disable_threshold` integer DEFAULT 10 NOT NULL,
 	`last_used_at` integer,
 	`error_msg` text,
 	`created_at` integer NOT NULL,

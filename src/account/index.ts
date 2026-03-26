@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { db } from '../db'
 import { accounts } from '../db/schema'
 
-type AccountStatus = 'active' | 'disabled' | 'exhausted' | 'error'
+type AccountStatus = 'active' | 'disabled' | 'error'
 
 export async function createAccount(data: {
   name: string
@@ -35,7 +35,6 @@ export async function listAccounts() {
       quota_limit: accounts.quota_limit,
       quota_used: accounts.quota_used,
       quota_reset_at: accounts.quota_reset_at,
-      auto_disable_threshold: accounts.auto_disable_threshold,
       last_used_at: accounts.last_used_at,
       error_msg: accounts.error_msg,
       created_at: accounts.created_at,
@@ -58,7 +57,6 @@ export async function updateAccount(
   id: string,
   updates: Partial<{
     name: string
-    auto_disable_threshold: number
   }>,
 ) {
   const now = Math.floor(Date.now() / 1000)

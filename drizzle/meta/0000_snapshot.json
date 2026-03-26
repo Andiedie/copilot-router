@@ -73,14 +73,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "auto_disable_threshold": {
-          "name": "auto_disable_threshold",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 10
-        },
         "last_used_at": {
           "name": "last_used_at",
           "type": "integer",
