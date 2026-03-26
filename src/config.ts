@@ -10,7 +10,7 @@ export const config = {
   port: Number(process.env.PORT ?? 4141),
   adminToken: process.env.ADMIN_TOKEN,
   dbPath: process.env.DB_PATH ?? "./data/copilot-router.db",
-  githubClientId: process.env.GITHUB_CLIENT_ID ?? "Ov23li8tweQw6odWQebz",
+  githubClientId: process.env.GITHUB_CLIENT_ID ?? "Iv1.b507a08c87ecfe98",
   copilotApiBase:
     process.env.COPILOT_API_BASE ?? "https://api.githubcopilot.com",
   githubApiBase: process.env.GITHUB_API_BASE ?? "https://api.github.com",
