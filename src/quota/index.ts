@@ -44,9 +44,9 @@ export async function syncAccountQuota(
       return { success: false, error: 'No premium_interactions in response' }
     }
 
-    const { entitlement, used, remaining, unlimited } = premium
+    const { entitlement, remaining, unlimited } = premium
     const quota_limit = unlimited === true ? -1 : (entitlement as number)
-    const quota_used = used as number
+    const quota_used = unlimited === true ? 0 : Math.max(0, (entitlement as number) - (remaining as number))
 
     await updateAccountQuota(account_id, {
       quota_limit,

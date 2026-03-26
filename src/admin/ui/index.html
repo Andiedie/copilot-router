@@ -717,7 +717,7 @@
                                         this.stopPolling();
                                         this.showDeviceFlow = false;
                                         Alpine.store('toasts').add('Authorization expired', 'error');
-                                    } else if (pollData.id) {
+                                    } else if (pollData.status === 'success') {
                                         // Success, account returned
                                         this.stopPolling();
                                         this.showDeviceFlow = false;
