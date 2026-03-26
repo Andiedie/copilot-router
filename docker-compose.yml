@@ -1,0 +1,11 @@
+services:
+  copilot-router:
+    build: .
+    ports:
+      - "4141:4141"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - DB_PATH=/app/data/copilot-router.db
+    restart: unless-stopped

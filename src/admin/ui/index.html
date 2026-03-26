@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copilot Router Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans antialiased h-screen flex overflow-hidden" x-data>
+
+    <!-- Global API Helper -->
+    <script>
+        async function $api(path, options = {}) {
+            const token = localStorage.getItem('cr_admin_token');
+            const res = await fetch(path, {
+                ...options,
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+            if (res.status === 401) {
+                Alpine.store('auth').authenticated = false;
+                Alpine.store('auth').token = '';
+                localStorage.removeItem('cr_admin_token');
+                return null;
+            }
+            return res;
+        }
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('auth', {
+                token: localStorage.getItem('cr_admin_token') || '',
+                authenticated: false,
+                async init() {
+                    if (this.token) {
+                        const res = await $api('/admin/health');
+                        if (res && res.ok) {
+                            this.authenticated = true;
+                        } else {
+                            this.token = '';
+                            localStorage.removeItem('cr_admin_token');
+                        }
+                    }
+                },
+                async login(password) {
+                    localStorage.setItem('cr_admin_token', password);
+                    this.token = password;
+                    const res = await $api('/admin/health');
+                    if (res && res.ok) {
+                        this.authenticated = true;
+                        Alpine.store('toasts').add('Logged in successfully', 'success');
+                    } else {
+                        this.token = '';
+                        localStorage.removeItem('cr_admin_token');
+                        Alpine.store('toasts').add('Invalid token', 'error');
+                    }
+                },
+                logout() {
+                    this.authenticated = false;
+                    this.token = '';
+                    localStorage.removeItem('cr_admin_token');
+                    Alpine.store('toasts').add('Logged out', 'info');
+                }
+            });
+
+            Alpine.store('router', {
+                page: window.location.hash.slice(1) || 'overview',
+                init() {
+                    window.addEventListener('hashchange', () => {
+                        this.page = window.location.hash.slice(1) || 'overview';
+                    });
+                }
+            });
+
+            Alpine.store('toasts', {
+                items: [],
+                add(msg, type = 'info') {
+                    const id = Date.now();
+                    this.items.push({ id, msg, type });
+                    setTimeout(() => {
+                        this.items = this.items.filter(t => t.id !== id);
+                    }, 3000);
+                }
+            });
+        });
+    </script>
+
+    <!-- Toasts -->
+    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2" x-data>
+        <template x-for="toast in $store.toasts.items" :key="toast.id">
+            <div class="px-4 py-2 rounded shadow-lg text-white text-sm font-medium transition-all duration-300"
+                 :class="{
+                     'bg-green-500': toast.type === 'success',
+                     'bg-red-500': toast.type === 'error',
+                     'bg-blue-500': toast.type === 'info'
+                 }"
+                 x-text="toast.msg">
+            </div>
+        </template>
+    </div>
+
+    <!-- Login Screen -->
+    <div x-show="!$store.auth.authenticated" x-cloak class="absolute inset-0 bg-gray-100 flex items-center justify-center z-40">
+        <div class="bg-white p-8 rounded-lg shadow-md w-96" x-data="{ password: '' }">
+            <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">Copilot Router Admin</h1>
+            <form @submit.prevent="$store.auth.login(password)">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Admin Token</label>
+                    <input type="password" x-model="password" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition-colors font-medium">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div x-show="$store.auth.authenticated" x-cloak class="flex w-full h-full">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-900 text-white flex flex-col flex-shrink-0">
+            <div class="p-4 border-b border-gray-800">
+                <h2 class="text-xl font-bold tracking-tight">Copilot Router</h2>
+                <p class="text-xs text-gray-400 mt-1">Admin Dashboard</p>
+            </div>
+            <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+                <a href="#overview" class="block px-3 py-2 rounded transition-colors" :class="$store.router.page === 'overview' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'">Overview</a>
+                <a href="#accounts" class="block px-3 py-2 rounded transition-colors" :class="$store.router.page === 'accounts' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'">Accounts</a>
+                <a href="#keys" class="block px-3 py-2 rounded transition-colors" :class="$store.router.page === 'keys' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'">API Keys</a>
+                <a href="#stats" class="block px-3 py-2 rounded transition-colors" :class="$store.router.page === 'stats' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'">Statistics</a>
+                <a href="#requests" class="block px-3 py-2 rounded transition-colors" :class="$store.router.page === 'requests' ? 'bg-gray-800 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'">Request Log</a>
+            </nav>
+            <div class="p-4 border-t border-gray-800">
+                <button @click="$store.auth.logout()" class="w-full text-left px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors text-sm">
+                    Logout
+                </button>
+            </div>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="flex-1 overflow-y-auto bg-gray-50 p-8">
+            
+            <!-- Overview Page -->
+            <div x-show="$store.router.page === 'overview'" x-data="overviewPage()" x-init="init()">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">Overview</h1>
+                    <button @click="fetchData()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading data...</div>
+
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Total Requests</h3>
+                        <p class="text-3xl font-bold text-gray-900" x-text="stats.total_requests?.toLocaleString() || '0'"></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Today's Requests</h3>
+                        <p class="text-3xl font-bold text-gray-900" x-text="stats.today_requests?.toLocaleString() || '0'"></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Premium Requests</h3>
+                        <p class="text-3xl font-bold text-gray-900" x-text="stats.total_premium_requests?.toLocaleString() || '0'"></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Active Accounts</h3>
+                        <p class="text-3xl font-bold text-gray-900">
+                            <span x-text="stats.active_accounts || '0'"></span>
+                            <span class="text-sm font-normal text-gray-500">/ <span x-text="stats.total_accounts || '0'"></span></span>
+                        </p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Active API Keys</h3>
+                        <p class="text-3xl font-bold text-gray-900" x-text="stats.active_keys || '0'"></p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Quota Usage</h3>
+                        <p class="text-3xl font-bold text-gray-900">
+                            <span x-text="(stats.quota_usage_pct || 0).toFixed(1)"></span>%
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Pool Status -->
+                <h2 class="text-lg font-bold text-gray-900 mb-4">Account Pool Status</h2>
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Total</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.total || '0'"></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">Active</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.active || '0'"></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-yellow-600">Exhausted</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.exhausted || '0'"></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">Error</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.error || '0'"></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-400">Disabled</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="pool.disabled || '0'"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Placeholder Pages -->
+            <div x-show="$store.router.page === 'accounts'" x-data="accountsPage()" x-init="init()">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">Accounts</h1>
+                    <div class="flex gap-2">
+                        <button @click="syncAll()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            Sync All
+                        </button>
+                        <button @click="startDeviceFlow()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Add Account
+                        </button>
+                    </div>
+                </div>
+
+                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading accounts...</div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name / GitHub</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quota</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="account in accounts" :key="account.id">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900" x-text="account.name"></div>
+                                        <div class="text-sm text-gray-500" x-text="account.github_login"></div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                              :class="{
+                                                  'bg-green-100 text-green-800': account.status === 'active',
+                                                  'bg-gray-100 text-gray-800': account.status === 'disabled',
+                                                  'bg-yellow-100 text-yellow-800': account.status === 'exhausted',
+                                                  'bg-red-100 text-red-800': account.status === 'error'
+                                              }"
+                                              x-text="account.status">
+                                        </span>
+                                        <div x-show="account.error_msg" class="text-xs text-red-500 mt-1 truncate max-w-xs" :title="account.error_msg" x-text="account.error_msg"></div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <template x-if="account.quota_limit > 0">
+                                            <div class="w-full max-w-[150px]">
+                                                <div class="flex justify-between text-xs mb-1">
+                                                    <span x-text="`${account.quota_used} / ${account.quota_limit}`"></span>
+                                                    <span class="text-gray-500" x-text="`(${account.quota_limit - account.quota_used} left)`"></span>
+                                                </div>
+                                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                                    <div class="h-2 rounded-full" :class="quotaColor(account)" :style="`width: ${quotaPercent(account)}%`"></div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="!account.quota_limit || account.quota_limit === 0">
+                                            <span class="text-sm text-gray-500">N/A</span>
+                                        </template>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <span x-text="account.last_used_at ? new Date(account.last_used_at).toLocaleString() : 'Never'"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button 
+                                          @click="toggleAccountStatus(account.id, account.status)"
+                                          :class="account.status === 'active' ? 'text-yellow-600 hover:text-yellow-900 mr-3' : 'text-green-600 hover:text-green-900 mr-3'"
+                                          :title="account.status === 'active' ? 'Disable Account' : 'Enable Account'"
+                                          x-text="account.status === 'active' ? 'Disable' : 'Enable'"
+                                        ></button>
+                                        <button @click="syncAccount(account.id)" class="text-blue-600 hover:text-blue-900 mr-3" title="Sync Quota">Sync</button>
+                                        <button @click="testAccount(account.id)" class="text-green-600 hover:text-green-900 mr-3" title="Test Account">Test</button>
+                                        <button @click="deleteAccount(account.id)" class="text-red-600 hover:text-red-900" title="Delete Account">Delete</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="accounts.length === 0 && !loading">
+                                <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No accounts found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Device Flow Modal -->
+                <div x-show="showDeviceFlow" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" x-cloak>
+                    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="stopPolling(); showDeviceFlow = false"></div>
+                        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div class="sm:flex sm:items-start">
+                                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">Add GitHub Account</h3>
+                                        <div class="mt-4">
+                                            <p class="text-sm text-gray-500 mb-4">Open the link in your browser and enter the code below to authorize Copilot Router.</p>
+                                            
+                                            <div class="bg-gray-100 p-6 rounded-lg text-center mb-4">
+                                                <div class="text-4xl font-mono font-bold tracking-widest text-gray-900 mb-2" x-text="deviceFlow.user_code"></div>
+                                                <a :href="deviceFlow.verification_uri" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm font-medium break-all" x-text="deviceFlow.verification_uri"></a>
+                                            </div>
+                                            
+                                            <div class="flex items-center justify-center text-sm text-gray-500">
+                                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Waiting for authorization...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm" @click="stopPolling(); showDeviceFlow = false">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="$store.router.page === 'keys'" x-data="keysPage()" x-init="init()">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">API Keys</h1>
+                    <form @submit.prevent="createKey" class="flex gap-2">
+                        <input type="text" x-model="newKeyName" placeholder="New key name..." class="px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Create Key
+                        </button>
+                    </form>
+                </div>
+
+                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading keys...</div>
+
+                <!-- New Key Alert -->
+                <div x-show="createdKey" class="mb-6 bg-green-50 border border-green-200 rounded-lg p-4" x-cloak>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                        </div>
+                        <div class="ml-3 w-full">
+                            <h3 class="text-sm font-medium text-green-800">API Key Created Successfully</h3>
+                            <div class="mt-2 text-sm text-green-700">
+                                <p>This key will only be shown once. Copy it now.</p>
+                            </div>
+                            <div class="mt-3 flex items-center gap-2">
+                                <code class="bg-white px-3 py-2 rounded border border-green-200 text-green-900 font-mono text-sm flex-1" x-text="createdKey?.key"></code>
+                                <button @click="navigator.clipboard.writeText(createdKey?.key); Alpine.store('toasts').add('Copied to clipboard', 'success')" class="bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm font-medium">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prefix</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
+                                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <template x-for="key in keys" :key="key.id">
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" x-text="key.name"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500" x-text="key.key_prefix + '...'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                              :class="key.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'"
+                                              x-text="key.status">
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="key.total_requests.toLocaleString()"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <span x-text="key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never'"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button @click="exportConfig(key.id)" class="text-blue-600 hover:text-blue-900 mr-3">Export Config</button>
+                                        <button @click="revokeKey(key.id)" class="text-red-600 hover:text-red-900">Revoke</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="keys.length === 0 && !loading">
+                                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">No API keys found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Config Modal -->
+                <div x-show="showConfigModal" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true" x-cloak>
+                    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="showConfigModal = false"></div>
+                        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div class="sm:flex sm:items-start">
+                                    <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">OpenCode Configuration</h3>
+                                        <div class="mt-2">
+                                            <p class="text-sm text-gray-500 mb-4" x-text="configData?.note"></p>
+                                            <div class="relative">
+                                                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto font-mono" x-text="configData?.copyText"></pre>
+                                                <button @click="navigator.clipboard.writeText(configData?.copyText); Alpine.store('toasts').add('Copied to clipboard', 'success')" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs transition-colors">Copy</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button type="button" class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm" @click="showConfigModal = false">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="$store.router.page === 'stats'" x-data="statsPage()" x-init="init()">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">Statistics</h1>
+                    <div class="flex gap-2 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                        <template x-for="p in ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days']" :key="p">
+                            <button @click="setPeriod(p)" 
+                                    class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                                    :class="period === p ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'"
+                                    x-text="p.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')">
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading statistics...</div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Request Trend</h3>
+                        <div class="h-72">
+                            <canvas id="chartTrend"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Distribution</h3>
+                        <div class="h-64 flex justify-center">
+                            <canvas id="chartModels"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Status Code Distribution</h3>
+                        <div class="h-64 flex justify-center">
+                            <canvas id="chartStatus"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Usage</h3>
+                        <div class="h-64">
+                            <canvas id="chartAccounts"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Usage</h3>
+                        <div class="h-64">
+                            <canvas id="chartKeys"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="$store.router.page === 'requests'" x-data="requestLogPage()" x-init="init()">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold text-gray-900">Request Log</h1>
+                    <button @click="fetchLog()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex gap-4 items-end">
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                        <input type="text" x-model="filters.model" @keydown.enter="applyFilters()" placeholder="e.g. gpt-4" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Status Code</label>
+                        <input type="number" x-model="filters.status_code" @keydown.enter="applyFilters()" placeholder="e.g. 200" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    </div>
+                    <button @click="applyFilters()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium h-[38px]">
+                        Apply Filters
+                    </button>
+                </div>
+
+                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading requests...</div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-4">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API Key</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <template x-for="item in items" :key="item.id">
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatTime(item.created_at)"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500" x-text="item.api_key_id ? item.api_key_id.substring(0, 8) + '...' : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="item.account_id ? item.account_id.substring(0, 8) + '...' : '-'"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            <div class="flex items-center gap-2">
+                                                <span x-text="item.model"></span>
+                                                <span x-show="item.is_premium" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 uppercase tracking-wide">Premium</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="item.endpoint"></td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                                  :class="statusColor(item.status_code)"
+                                                  x-text="item.status_code">
+                                            </span>
+                                            <div x-show="item.error" class="text-xs text-red-500 mt-1 truncate max-w-xs" :title="item.error" x-text="item.error"></div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right" x-text="item.duration_ms + ' ms'"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="items.length === 0 && !loading">
+                                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">No requests found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between bg-white px-4 py-3 border border-gray-200 rounded-lg shadow-sm sm:px-6">
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700">
+                                Showing <span class="font-medium" x-text="total === 0 ? 0 : (page - 1) * limit + 1"></span> to <span class="font-medium" x-text="Math.min(page * limit, total)"></span> of <span class="font-medium" x-text="total"></span> results
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                <button @click="prevPage()" :disabled="page === 1" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span class="sr-only">Previous</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" /></svg>
+                                </button>
+                                <button @click="nextPage()" :disabled="page * limit >= total" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span class="sr-only">Next</span>
+                                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        function overviewPage() {
+            return {
+                stats: {},
+                pool: {},
+                loading: false,
+                interval: null,
+                async init() {
+                    // Only fetch if authenticated
+                    this.$watch('$store.auth.authenticated', (val) => {
+                        if (val) {
+                            this.fetchData();
+                            this.startAutoRefresh();
+                        } else {
+                            this.stopAutoRefresh();
+                        }
+                    });
+                    
+                    if (Alpine.store('auth').authenticated) {
+                        this.fetchData();
+                        this.startAutoRefresh();
+                    }
+                },
+                async fetchData() {
+                    this.loading = true;
+                    try {
+                        const [statsRes, poolRes] = await Promise.all([
+                            $api('/admin/stats/overview'),
+                            $api('/admin/pool-status')
+                        ]);
+                        
+                        if (statsRes && statsRes.ok) {
+                            this.stats = await statsRes.json();
+                        }
+                        if (poolRes && poolRes.ok) {
+                            this.pool = await poolRes.json();
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch overview data', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                startAutoRefresh() {
+                    this.stopAutoRefresh();
+                    this.interval = setInterval(() => {
+                        if (Alpine.store('router').page === 'overview') {
+                            this.fetchData();
+                        }
+                    }, 30000);
+                },
+                stopAutoRefresh() {
+                    if (this.interval) {
+                        clearInterval(this.interval);
+                        this.interval = null;
+                    }
+                }
+            }
+        }
+
+        function accountsPage() {
+            return {
+                accounts: [],
+                loading: false,
+                showDeviceFlow: false,
+                deviceFlow: { user_code: '', verification_uri: '', device_code: '', polling: false, interval: null },
+                async init() {
+                    this.$watch('$store.router.page', (val) => {
+                        if (val === 'accounts') this.fetchAccounts();
+                    });
+                    if (Alpine.store('router').page === 'accounts') {
+                        this.fetchAccounts();
+                    }
+                },
+                async fetchAccounts() {
+                    this.loading = true;
+                    try {
+                        const res = await $api('/admin/accounts');
+                        if (res && res.ok) {
+                            this.accounts = await res.json();
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch accounts', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async startDeviceFlow() {
+                    try {
+                        const res = await $api('/admin/accounts/authorize', { method: 'POST' });
+                        if (res && res.ok) {
+                            const data = await res.json();
+                            this.deviceFlow = { ...data, polling: true, interval: null };
+                            this.showDeviceFlow = true;
+                            
+                            this.deviceFlow.interval = setInterval(async () => {
+                                if (!this.deviceFlow.polling) return;
+                                
+                                const pollRes = await $api('/admin/accounts/authorize/poll', {
+                                    method: 'POST',
+                                    body: JSON.stringify({ device_code: this.deviceFlow.device_code })
+                                });
+                                
+                                if (pollRes && pollRes.ok) {
+                                    const pollData = await pollRes.json();
+                                    if (pollData.status === 'pending') {
+                                        // continue polling
+                                    } else if (pollData.status === 'expired') {
+                                        this.stopPolling();
+                                        this.showDeviceFlow = false;
+                                        Alpine.store('toasts').add('Authorization expired', 'error');
+                                    } else if (pollData.id) {
+                                        // Success, account returned
+                                        this.stopPolling();
+                                        this.showDeviceFlow = false;
+                                        Alpine.store('toasts').add('Account added successfully', 'success');
+                                        this.fetchAccounts();
+                                    }
+                                }
+                            }, 5000);
+                            
+                            // 5 minute timeout
+                            setTimeout(() => {
+                                if (this.deviceFlow.polling) {
+                                    this.stopPolling();
+                                    this.showDeviceFlow = false;
+                                    Alpine.store('toasts').add('Authorization timed out', 'error');
+                                }
+                            }, 5 * 60 * 1000);
+                        }
+                    } catch (err) {
+                        console.error('Failed to start device flow', err);
+                        Alpine.store('toasts').add('Failed to start authorization', 'error');
+                    }
+                },
+                stopPolling() {
+                    if (this.deviceFlow.interval) {
+                        clearInterval(this.deviceFlow.interval);
+                    }
+                    this.deviceFlow.polling = false;
+                },
+                async toggleAccountStatus(id, currentStatus) {
+                    const newStatus = currentStatus === 'active' ? 'disabled' : 'active';
+                    try {
+                        const res = await $api(`/admin/accounts/${id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: newStatus })
+                        });
+                        if (res && res.ok) {
+                            Alpine.store('toasts').add(`Account ${newStatus === 'active' ? 'enabled' : 'disabled'}`, 'success');
+                            this.fetchAccounts();
+                        }
+                    } catch (err) {
+                        console.error('Failed to toggle account status', err);
+                    }
+                },
+                async syncAccount(id) {
+                    try {
+                        const res = await $api(`/admin/accounts/${id}/sync`, { method: 'POST' });
+                        if (res && res.ok) {
+                            Alpine.store('toasts').add('Account synced', 'success');
+                            this.fetchAccounts();
+                        } else {
+                            Alpine.store('toasts').add('Failed to sync account', 'error');
+                        }
+                    } catch (err) {
+                        console.error('Failed to sync account', err);
+                    }
+                },
+                async testAccount(id) {
+                    try {
+                        const res = await $api(`/admin/accounts/${id}/test`, { method: 'POST' });
+                        if (res && res.ok) {
+                            const data = await res.json();
+                            if (data.success) {
+                                Alpine.store('toasts').add(`✓ OK (${data.latency_ms}ms) - ${data.model}`, 'success');
+                            } else {
+                                Alpine.store('toasts').add(`✗ Error: ${data.error}`, 'error');
+                            }
+                            this.fetchAccounts();
+                        }
+                    } catch (err) {
+                        console.error('Failed to test account', err);
+                    }
+                },
+                async deleteAccount(id) {
+                    if (!confirm('Are you sure you want to delete this account?')) return;
+                    try {
+                        const res = await $api(`/admin/accounts/${id}`, { method: 'DELETE' });
+                        if (res && res.ok) {
+                            Alpine.store('toasts').add('Account deleted', 'success');
+                            this.fetchAccounts();
+                        }
+                    } catch (err) {
+                        console.error('Failed to delete account', err);
+                    }
+                },
+                async syncAll() {
+                    try {
+                        const res = await $api('/admin/accounts/sync-all', { method: 'POST' });
+                        if (res && res.ok) {
+                            const data = await res.json();
+                            Alpine.store('toasts').add(`Synced ${data.synced} accounts (${data.failed} failed)`, 'success');
+                            this.fetchAccounts();
+                        }
+                    } catch (err) {
+                        console.error('Failed to sync all accounts', err);
+                    }
+                },
+                quotaPercent(account) {
+                    if (!account.quota_limit) return 0;
+                    return Math.min(100, (account.quota_used / account.quota_limit) * 100);
+                },
+                quotaColor(account) {
+                    const pct = this.quotaPercent(account);
+                    if (pct < 50) return 'bg-green-500';
+                    if (pct < 80) return 'bg-yellow-500';
+                    return 'bg-red-500';
+                }
+            }
+        }
+
+        function keysPage() {
+            return {
+                keys: [],
+                loading: false,
+                newKeyName: '',
+                createdKey: null,
+                showConfigModal: false,
+                configData: null,
+                async init() {
+                    this.$watch('$store.router.page', (val) => {
+                        if (val === 'keys') this.fetchKeys();
+                    });
+                    if (Alpine.store('router').page === 'keys') {
+                        this.fetchKeys();
+                    }
+                },
+                async fetchKeys() {
+                    this.loading = true;
+                    try {
+                        const res = await $api('/admin/keys');
+                        if (res && res.ok) {
+                            this.keys = await res.json();
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch keys', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async createKey() {
+                    if (!this.newKeyName) return;
+                    try {
+                        const res = await $api('/admin/keys', {
+                            method: 'POST',
+                            body: JSON.stringify({ name: this.newKeyName })
+                        });
+                        if (res && res.ok) {
+                            this.createdKey = await res.json();
+                            this.newKeyName = '';
+                            this.fetchKeys();
+                            Alpine.store('toasts').add('API Key created', 'success');
+                        }
+                    } catch (err) {
+                        console.error('Failed to create key', err);
+                        Alpine.store('toasts').add('Failed to create API Key', 'error');
+                    }
+                },
+                async exportConfig(id) {
+                    try {
+                        const res = await $api(`/admin/keys/${id}/opencode-config`);
+                        if (res && res.ok) {
+                            this.configData = await res.json();
+                            this.showConfigModal = true;
+                        }
+                    } catch (err) {
+                        console.error('Failed to export config', err);
+                        Alpine.store('toasts').add('Failed to export config', 'error');
+                    }
+                },
+                async revokeKey(id) {
+                    if (!confirm('Are you sure you want to revoke this API key? This action cannot be undone.')) return;
+                    try {
+                        const res = await $api(`/admin/keys/${id}`, { method: 'DELETE' });
+                        if (res && res.ok) {
+                            Alpine.store('toasts').add('API Key revoked', 'success');
+                            if (this.createdKey && this.createdKey.id === id) {
+                                this.createdKey = null;
+                            }
+                            this.fetchKeys();
+                        }
+                    } catch (err) {
+                        console.error('Failed to revoke key', err);
+                    }
+                }
+            }
+        }
+
+        let _charts = {};
+
+        function statsPage() {
+            return {
+                period: 'this_month',
+                loading: false,
+                trendData: [],
+                modelData: [],
+                accountData: [],
+                keyData: [],
+                statusData: [],
+                async init() {
+                    this.$watch('$store.router.page', (val) => {
+                        if (val === 'stats') this.fetchAll();
+                    });
+                    if (Alpine.store('router').page === 'stats') {
+                        await this.fetchAll();
+                    }
+                },
+                async fetchAll() {
+                    this.loading = true;
+                    try {
+                        const [trendRes, modelRes, accountRes, keyRes, statusRes] = await Promise.all([
+                            $api(`/admin/stats/timeseries?interval=hour&period=${this.period}`),
+                            $api(`/admin/stats?group_by=model&period=${this.period}`),
+                            $api(`/admin/stats?group_by=account&period=${this.period}`),
+                            $api(`/admin/stats?group_by=api_key&period=${this.period}`),
+                            $api(`/admin/stats?group_by=status_code&period=${this.period}`)
+                        ]);
+                        if (trendRes?.ok) this.trendData = await trendRes.json();
+                        if (modelRes?.ok) this.modelData = await modelRes.json();
+                        if (accountRes?.ok) this.accountData = await accountRes.json();
+                        if (keyRes?.ok) this.keyData = await keyRes.json();
+                        if (statusRes?.ok) this.statusData = await statusRes.json();
+                    } catch (err) {
+                        console.error('Failed to fetch stats', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                    await this.$nextTick();
+                    this.renderCharts();
+                },
+                renderCharts() {
+                    if (_charts.trend) _charts.trend.destroy();
+                    const trendCtx = document.getElementById('chartTrend');
+                    if (trendCtx) {
+                        _charts.trend = new Chart(trendCtx, {
+                            type: 'line',
+                            data: {
+                                labels: this.trendData.map(d => new Date(d.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
+                                datasets: [
+                                    {
+                                        label: 'Total Requests',
+                                        data: this.trendData.map(d => d.count),
+                                        borderColor: '#3b82f6',
+                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                        fill: true,
+                                        tension: 0.4
+                                    },
+                                    {
+                                        label: 'Premium Requests',
+                                        data: this.trendData.map(d => d.premium_count),
+                                        borderColor: '#f97316',
+                                        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                                        fill: true,
+                                        tension: 0.4
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: { legend: { position: 'top' } },
+                                scales: { y: { beginAtZero: true } }
+                            }
+                        });
+                    }
+
+                    if (_charts.models) _charts.models.destroy();
+                    const modelsCtx = document.getElementById('chartModels');
+                    if (modelsCtx) {
+                        _charts.models = new Chart(modelsCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: this.modelData.map(d => d.label || 'Unknown'),
+                                datasets: [{
+                                    data: this.modelData.map(d => d.count),
+                                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                        });
+                    }
+
+                    if (_charts.status) _charts.status.destroy();
+                    const statusCtx = document.getElementById('chartStatus');
+                    if (statusCtx) {
+                        _charts.status = new Chart(statusCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: this.statusData.map(d => d.label || 'Unknown'),
+                                datasets: [{
+                                    data: this.statusData.map(d => d.count),
+                                    backgroundColor: this.statusData.map(d => {
+                                        const code = parseInt(d.label);
+                                        if (code >= 500) return '#ef4444';
+                                        if (code >= 400) return '#f59e0b';
+                                        return '#10b981';
+                                    })
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                        });
+                    }
+
+                    if (_charts.accounts) _charts.accounts.destroy();
+                    const accountsCtx = document.getElementById('chartAccounts');
+                    if (accountsCtx) {
+                        _charts.accounts = new Chart(accountsCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: this.accountData.map(d => d.label ? d.label.substring(0, 12) + '...' : 'Unknown'),
+                                datasets: [{
+                                    label: 'Requests',
+                                    data: this.accountData.map(d => d.count),
+                                    backgroundColor: '#3b82f6'
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                        });
+                    }
+
+                    if (_charts.keys) _charts.keys.destroy();
+                    const keysCtx = document.getElementById('chartKeys');
+                    if (keysCtx) {
+                        _charts.keys = new Chart(keysCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: this.keyData.map(d => d.label ? d.label.substring(0, 8) + '...' : 'Unknown'),
+                                datasets: [{
+                                    label: 'Requests',
+                                    data: this.keyData.map(d => d.count),
+                                    backgroundColor: '#8b5cf6'
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                        });
+                    }
+                },
+                setPeriod(p) {
+                    this.period = p;
+                    this.fetchAll();
+                }
+            }
+        }
+
+        function requestLogPage() {
+            return {
+                items: [],
+                total: 0,
+                page: 1,
+                limit: 50,
+                filters: { model: '', status_code: '' },
+                loading: false,
+                async init() {
+                    this.$watch('$store.router.page', (val) => {
+                        if (val === 'requests') this.fetchLog();
+                    });
+                    if (Alpine.store('router').page === 'requests') {
+                        this.fetchLog();
+                    }
+                },
+                async fetchLog() {
+                    this.loading = true;
+                    const params = new URLSearchParams({ page: this.page, limit: this.limit });
+                    if (this.filters.model) params.append('model', this.filters.model);
+                    if (this.filters.status_code) params.append('status_code', this.filters.status_code);
+                    try {
+                        const res = await $api(`/admin/requests?${params}`);
+                        if (res && res.ok) {
+                            const data = await res.json();
+                            this.items = data.items;
+                            this.total = data.total;
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch request log', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                applyFilters() { this.page = 1; this.fetchLog(); },
+                nextPage() { if (this.page * this.limit < this.total) { this.page++; this.fetchLog(); } },
+                prevPage() { if (this.page > 1) { this.page--; this.fetchLog(); } },
+                formatTime(ts) { return ts ? new Date(ts * 1000).toLocaleString() : '-'; },
+                statusColor(code) {
+                    if (code >= 500) return 'bg-red-100 text-red-800';
+                    if (code >= 400) return 'bg-yellow-100 text-yellow-800';
+                    return 'bg-green-100 text-green-800';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+import { integer, index, sqliteTable, text } from "drizzle-orm/sqlite-core"
+
+export const accounts = sqliteTable("accounts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  github_login: text("github_login"),
+  oauth_token: text("oauth_token").notNull(),
+  status: text("status").notNull().default("active"),
+  copilot_plan: text("copilot_plan"),
+  quota_limit: integer("quota_limit").notNull().default(0),
+  quota_used: integer("quota_used").notNull().default(0),
+  quota_reset_at: integer("quota_reset_at"),
+  auto_disable_threshold: integer("auto_disable_threshold").notNull().default(10),
+  last_used_at: integer("last_used_at"),
+  error_msg: text("error_msg"),
+  created_at: integer("created_at").notNull(),
+  updated_at: integer("updated_at").notNull(),
+})
+
+export const api_keys = sqliteTable("api_keys", {
+  id: text("id").primaryKey(),
+  key_hash: text("key_hash").notNull().unique(),
+  key_prefix: text("key_prefix").notNull(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("active"),
+  created_at: integer("created_at").notNull(),
+  last_used_at: integer("last_used_at"),
+  total_requests: integer("total_requests").notNull().default(0),
+})
+
+export const requests = sqliteTable(
+  "requests",
+  {
+    id: text("id").primaryKey(),
+    api_key_id: text("api_key_id").notNull(),
+    account_id: text("account_id"),
+    model: text("model"),
+    endpoint: text("endpoint"),
+    status_code: integer("status_code"),
+    duration_ms: integer("duration_ms"),
+    is_premium: integer("is_premium").notNull().default(0),
+    ratelimit_remaining: integer("ratelimit_remaining"),
+    ratelimit_limit: integer("ratelimit_limit"),
+    error: text("error"),
+    created_at: integer("created_at").notNull(),
+  },
+  (t) => [
+    index("idx_requests_api_key_id").on(t.api_key_id),
+    index("idx_requests_account_id").on(t.account_id),
+    index("idx_requests_model").on(t.model),
+    index("idx_requests_created_at").on(t.created_at),
+    index("idx_requests_status_code").on(t.status_code),
+  ],
+)
+
+export const quota_snapshots = sqliteTable("quota_snapshots", {
+  id: text("id").primaryKey(),
+  account_id: text("account_id").notNull(),
+  used: integer("used").notNull(),
+  limit: integer("limit").notNull(),
+  remaining: integer("remaining").notNull(),
+  captured_at: integer("captured_at").notNull(),
+})
