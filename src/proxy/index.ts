@@ -48,9 +48,6 @@ export async function proxyHandler(c: Context) {
         endpoint,
         statusCode: 503,
         durationMs,
-        ratelimitRemaining: null,
-        ratelimitLimit: null,
-        ratelimitReset: null,
         error: "No available accounts",
       })
     }
@@ -68,9 +65,6 @@ export async function proxyHandler(c: Context) {
         endpoint,
         statusCode: 502,
         durationMs,
-        ratelimitRemaining: null,
-        ratelimitLimit: null,
-        ratelimitReset: null,
         error: "Failed to get token for account",
       })
     }
@@ -94,9 +88,6 @@ export async function proxyHandler(c: Context) {
   ;(c as any).set("proxyStatus", upstreamRes.status)
 
   if (apiKey) {
-    const rlRemaining = upstreamRes.headers.get("x-ratelimit-remaining")
-    const rlLimit = upstreamRes.headers.get("x-ratelimit-limit")
-    const rlReset = upstreamRes.headers.get("x-ratelimit-reset")
     logRequest({
       apiKeyId: apiKey.id,
       accountId: account.id,
@@ -104,9 +95,6 @@ export async function proxyHandler(c: Context) {
       endpoint,
       statusCode: upstreamRes.status,
       durationMs,
-      ratelimitRemaining: rlRemaining !== null ? parseInt(rlRemaining, 10) : null,
-      ratelimitLimit: rlLimit !== null ? parseInt(rlLimit, 10) : null,
-      ratelimitReset: rlReset !== null ? parseInt(rlReset, 10) : null,
     })
   }
 

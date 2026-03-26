@@ -38,8 +38,6 @@ export const requests = sqliteTable(
     endpoint: text("endpoint"),
     status_code: integer("status_code"),
     duration_ms: integer("duration_ms"),
-    ratelimit_remaining: integer("ratelimit_remaining"),
-    ratelimit_limit: integer("ratelimit_limit"),
     error: text("error"),
     created_at: integer("created_at").notNull(),
   },
@@ -51,12 +49,3 @@ export const requests = sqliteTable(
     index("idx_requests_status_code").on(t.status_code),
   ],
 )
-
-export const quota_snapshots = sqliteTable("quota_snapshots", {
-  id: text("id").primaryKey(),
-  account_id: text("account_id").notNull(),
-  used: integer("used").notNull(),
-  limit: integer("limit").notNull(),
-  remaining: integer("remaining").notNull(),
-  captured_at: integer("captured_at").notNull(),
-})

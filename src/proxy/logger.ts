@@ -9,9 +9,6 @@ export interface LogRequestParams {
   endpoint: string
   statusCode: number
   durationMs: number
-  ratelimitRemaining: number | null
-  ratelimitLimit: number | null
-  ratelimitReset: number | null
   error?: string | null
 }
 
@@ -29,8 +26,6 @@ export function logRequest(params: LogRequestParams): void {
           endpoint: params.endpoint,
           status_code: params.statusCode,
           duration_ms: params.durationMs,
-          ratelimit_remaining: params.ratelimitRemaining,
-          ratelimit_limit: params.ratelimitLimit,
           error: params.error ?? null,
           created_at: now,
         })

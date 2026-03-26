@@ -59,8 +59,6 @@ export interface RequestLogResult {
     endpoint: string | null
     status_code: number | null
     duration_ms: number | null
-    ratelimit_remaining: number | null
-    ratelimit_limit: number | null
     error: string | null
     created_at: number
   }>
@@ -276,7 +274,7 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
       a.name as account_name,
       r.model, r.endpoint,
       r.status_code, r.duration_ms,
-      r.ratelimit_remaining, r.ratelimit_limit, r.error, r.created_at
+      r.error, r.created_at
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.api_key_id
     LEFT JOIN accounts a ON a.id = r.account_id
@@ -293,8 +291,6 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
     endpoint: string | null
     status_code: number | null
     duration_ms: number | null
-    ratelimit_remaining: number | null
-    ratelimit_limit: number | null
     error: string | null
     created_at: number
   }>(sql.raw(dataQuery))

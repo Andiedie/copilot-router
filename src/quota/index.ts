@@ -1,7 +1,5 @@
-import { nanoid } from 'nanoid'
 import { config } from '../config'
 import { db } from '../db'
-import { quota_snapshots } from '../db/schema'
 import { getAccount, getActiveAccounts, updateAccountQuota } from '../account'
 import { getToken } from '../account/token'
 import { COPILOT_HEADERS } from '../proxy/headers'
@@ -52,16 +50,6 @@ export async function syncAccountQuota(
       quota_limit,
       quota_used,
       quota_reset_at: null,
-    })
-
-    const now = Math.floor(Date.now() / 1000)
-    await db.insert(quota_snapshots).values({
-      id: nanoid(),
-      account_id,
-      used: quota_used,
-      limit: quota_limit,
-      remaining: remaining as number,
-      captured_at: now,
     })
 
     return { success: true, quota_limit, quota_used, remaining: remaining as number }
