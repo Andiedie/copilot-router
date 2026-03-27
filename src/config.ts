@@ -1,10 +1,9 @@
 import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 if (!process.env.ADMIN_TOKEN) {
   throw new Error("ADMIN_TOKEN environment variable is required");
 }
-
-mkdirSync("data", { recursive: true });
 
 export const config = {
   port: Number(process.env.PORT ?? 4141),
@@ -17,3 +16,5 @@ export const config = {
   tokenRefreshBuffer: Number(process.env.TOKEN_REFRESH_BUFFER ?? 0.8),
   testModel: process.env.TEST_MODEL ?? "gpt-5-mini",
 };
+
+mkdirSync(dirname(config.dbPath), { recursive: true });
