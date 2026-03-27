@@ -44,7 +44,6 @@ docker run -d \
   -p 4141:4141 \
   -v $(pwd)/data:/app/data \
   -e ADMIN_TOKEN=your-secret \
-  -e DB_PATH=/app/data/copilot-router.db \
   ghcr.io/andiedie/copilot-router:latest
 ```
 
