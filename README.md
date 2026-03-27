@@ -34,13 +34,18 @@ Open `http://localhost:4141/admin/` to access the admin console.
 ```bash
 # docker compose (recommended)
 ADMIN_TOKEN=your-secret docker compose up -d
+```
 
-# or docker run
+```bash
+# docker run
 docker run -d \
+  --name copilot-router \
+  --restart unless-stopped \
   -p 4141:4141 \
   -v $(pwd)/data:/app/data \
   -e ADMIN_TOKEN=your-secret \
-  ghcr.io/<your-org>/copilot-router:latest
+  -e DB_PATH=/app/data/copilot-router.db \
+  ghcr.io/andiedie/copilot-router:latest
 ```
 
 The database is stored in `./data/` on the host, mounted to `/app/data` in the container.
