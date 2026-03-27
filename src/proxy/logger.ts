@@ -6,7 +6,6 @@ export interface LogRequestParams {
   apiKeyId: string
   accountId: string | null
   model: string
-  endpoint: string
   statusCode: number
   durationMs: number
   error?: string | null
@@ -23,7 +22,6 @@ export function logRequest(params: LogRequestParams): void {
           api_key_id: params.apiKeyId,
           account_id: params.accountId,
           model: params.model,
-          endpoint: params.endpoint,
           status_code: params.statusCode,
           duration_ms: params.durationMs,
           error: params.error ?? null,

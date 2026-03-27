@@ -49,7 +49,6 @@ export async function syncAccountQuota(
     await updateAccountQuota(account_id, {
       quota_limit,
       quota_used,
-      quota_reset_at: null,
     })
 
     return { success: true, quota_limit, quota_used, remaining: remaining as number }

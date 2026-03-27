@@ -3,26 +3,14 @@ import { nanoid } from "nanoid"
 import { db } from "../db"
 import { api_keys } from "../db/schema"
 
-async function sha256(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input)
-  const hash = await crypto.subtle.digest("SHA-256", data)
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-}
-
 export async function createApiKey(name: string) {
   const id = nanoid()
   const key = `sk-cr-${nanoid(32)}`
-  const key_hash = await sha256(key)
-  const key_prefix = key.slice(0, 8)
   const now = Math.floor(Date.now() / 1000)
 
   await db.insert(api_keys).values({
     id,
     key,
-    key_hash,
-    key_prefix,
     name,
     status: "active",
     created_at: now,
@@ -37,7 +25,6 @@ export async function listApiKeys() {
     .select({
       id: api_keys.id,
       key: api_keys.key,
-      key_prefix: api_keys.key_prefix,
       name: api_keys.name,
       status: api_keys.status,
       created_at: api_keys.created_at,
@@ -58,8 +45,7 @@ export async function deleteApiKey(id: string) {
 }
 
 export async function validateApiKey(key: string) {
-  const key_hash = await sha256(key)
-  const [record] = await db.select().from(api_keys).where(eq(api_keys.key_hash, key_hash))
+  const [record] = await db.select().from(api_keys).where(eq(api_keys.key, key))
   if (!record || record.status !== "active") return null
 
   const now = Math.floor(Date.now() / 1000)

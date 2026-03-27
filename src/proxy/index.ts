@@ -29,9 +29,6 @@ export async function proxyHandler(c: Context) {
   const upstreamPath = originalUrl.pathname.startsWith("/v1")
     ? originalUrl.pathname.slice(3)
     : originalUrl.pathname
-  const endpoint = upstreamPath.startsWith("/")
-    ? upstreamPath.slice(1)
-    : upstreamPath
 
   const hasBody = c.req.method !== "GET" && c.req.method !== "HEAD"
   const bodyText = hasBody ? await c.req.text() : ""
@@ -45,7 +42,6 @@ export async function proxyHandler(c: Context) {
         apiKeyId: apiKey.id,
         accountId: null,
         model,
-        endpoint,
         statusCode: 503,
         durationMs,
         error: "No available accounts",
@@ -62,7 +58,6 @@ export async function proxyHandler(c: Context) {
         apiKeyId: apiKey.id,
         accountId: account.id,
         model,
-        endpoint,
         statusCode: 502,
         durationMs,
         error: "Failed to get token for account",
@@ -92,7 +87,6 @@ export async function proxyHandler(c: Context) {
       apiKeyId: apiKey.id,
       accountId: account.id,
       model,
-      endpoint,
       statusCode: upstreamRes.status,
       durationMs,
     })

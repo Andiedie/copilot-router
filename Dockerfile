@@ -15,4 +15,4 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p /app/data
 EXPOSE 4141
-CMD ["sh", "-c", "bun src/db/migrate.ts && bun src/index.ts"]
+CMD ["bun", "src/index.ts"]

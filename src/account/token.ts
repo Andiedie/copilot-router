@@ -47,7 +47,7 @@ async function doRefresh(account_id: string): Promise<string | null> {
     })
     return result.token
   } catch {
-    await setAccountStatus(account_id, 'error', 'Token exchange failed')
+    await setAccountStatus(account_id, 'error')
     tokenCache.delete(account_id)
     return null
   } finally {

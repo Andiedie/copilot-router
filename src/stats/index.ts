@@ -12,7 +12,7 @@ export interface OverviewResult {
 }
 
 export interface StatsParams {
-  group_by: 'model' | 'api_key' | 'account' | 'hour' | 'day' | 'status_code' | 'endpoint'
+  group_by: 'model' | 'api_key' | 'account' | 'hour' | 'day' | 'status_code'
   from?: number
   to?: number
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
@@ -56,7 +56,6 @@ export interface RequestLogResult {
     api_key_name: string | null
     account_name: string | null
     model: string | null
-    endpoint: string | null
     status_code: number | null
     duration_ms: number | null
     error: string | null
@@ -200,10 +199,6 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
       selectExpr = `CAST(COALESCE(r.status_code, 0) AS TEXT) as label`
       groupExpr = 'r.status_code'
       break
-    case 'endpoint':
-      selectExpr = `COALESCE(r.endpoint, 'unknown') as label`
-      groupExpr = 'r.endpoint'
-      break
   }
 
   const query = `
@@ -272,7 +267,7 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
       r.id,
       k.name as api_key_name,
       a.name as account_name,
-      r.model, r.endpoint,
+      r.model,
       r.status_code, r.duration_ms,
       r.error, r.created_at
     FROM requests r
@@ -288,7 +283,6 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
     api_key_name: string | null
     account_name: string | null
     model: string | null
-    endpoint: string | null
     status_code: number | null
     duration_ms: number | null
     error: string | null
