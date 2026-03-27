@@ -69,13 +69,29 @@ export async function proxyHandler(c: Context) {
   const upstreamUrl = `${config.copilotApiBase}${upstreamPath}${originalUrl.search}`
   const headers = buildUpstreamHeaders(c.req.raw.headers, jwt)
 
-  const upstreamRes = await fetch(upstreamUrl, {
-    method: c.req.method,
-    headers,
-    body: hasBody ? bodyText : undefined,
-    // @ts-ignore duplex is required by some runtimes for streamed request body
-    duplex: "half",
-  })
+  let upstreamRes: Response
+  try {
+    upstreamRes = await fetch(upstreamUrl, {
+      method: c.req.method,
+      headers,
+      body: hasBody ? bodyText : undefined,
+      // @ts-ignore duplex is required by some runtimes for streamed request body
+      duplex: "half",
+    })
+  } catch (err) {
+    const durationMs = Math.round(performance.now() - startTime)
+    if (apiKey) {
+      logRequest({
+        apiKeyId: apiKey.id,
+        accountId: account.id,
+        model,
+        statusCode: 502,
+        durationMs,
+        error: String(err),
+      })
+    }
+    return c.json({ error: "Upstream request failed", detail: String(err) }, 502)
+  }
 
   const durationMs = Math.round(performance.now() - startTime)
 
