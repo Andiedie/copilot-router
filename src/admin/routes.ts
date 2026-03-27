@@ -160,8 +160,10 @@ adminApp.get('/keys/:id/opencode-config', async (c) => {
 
   const authJson = {
     'github-copilot': {
-      type: 'api',
-      key: key.key,
+      type: 'oauth',
+      refresh: key.key,
+      access: key.key,
+      expires: 0,
     },
   }
 
