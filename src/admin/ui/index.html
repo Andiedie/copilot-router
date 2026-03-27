@@ -322,7 +322,10 @@
                                             <p class="text-sm text-gray-500 mb-4">Open the link in your browser and enter the code below to authorize Copilot Router.</p>
                                             
                                             <div class="bg-gray-100 p-6 rounded-lg text-center mb-4">
-                                                <div class="text-4xl font-mono font-bold tracking-widest text-gray-900 mb-2" x-text="deviceFlow.user_code"></div>
+                                                <div class="flex items-center justify-center gap-3 mb-2">
+                                                    <div class="text-4xl font-mono font-bold tracking-widest text-gray-900" x-text="deviceFlow.user_code"></div>
+                                                    <button @click="navigator.clipboard.writeText(deviceFlow.user_code); $el.innerText = 'Copied!'; setTimeout(() => $el.innerText = 'Copy', 2000)" class="text-xs bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-2 py-1 rounded font-medium transition-colors">Copy</button>
+                                                </div>
                                                 <a :href="deviceFlow.verification_uri" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm font-medium break-all" x-text="deviceFlow.verification_uri"></a>
                                             </div>
                                             
@@ -331,7 +334,9 @@
                                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                                 </svg>
-                                                Waiting for authorization...
+                                                <span x-show="deviceFlow.pollStatus === 'waiting'">Waiting for authorization...</span>
+                                                <span x-show="deviceFlow.pollStatus === 'checking'">Checking status...</span>
+                                                <span x-show="deviceFlow.pollStatus === 'slow_down'">Slowing down, retrying in <span x-text="deviceFlow.pollCountdown"></span>s...</span>
                                             </div>
                                         </div>
                                     </div>
@@ -673,7 +678,7 @@
                 accounts: [],
                 loading: false,
                 showDeviceFlow: false,
-                deviceFlow: { user_code: '', verification_uri: '', device_code: '', polling: false, interval: null },
+                deviceFlow: { user_code: '', verification_uri: '', device_code: '', polling: false, interval: null, pollStatus: 'waiting', pollCountdown: 0, countdownInterval: null },
                 async init() {
                     this.$watch('$store.router.page', (val) => {
                         if (val === 'accounts') this.fetchAccounts();
@@ -700,13 +705,24 @@
                         const res = await $api('/admin/accounts/authorize', { method: 'POST' });
                         if (res && res.ok) {
                             const data = await res.json();
-                            this.deviceFlow = { ...data, polling: true, interval: null };
+                            this.deviceFlow = { ...data, polling: true, interval: null, pollStatus: 'waiting', pollCountdown: 0, countdownInterval: null };
                             this.showDeviceFlow = true;
                             
+                            const clearCountdown = () => {
+                                if (this.deviceFlow.countdownInterval) {
+                                    clearInterval(this.deviceFlow.countdownInterval);
+                                    this.deviceFlow.countdownInterval = null;
+                                }
+                                this.deviceFlow.pollCountdown = 0;
+                            };
+
                             const schedulePoll = (intervalMs) => {
                                 if (!this.deviceFlow.polling) return;
                                 this.deviceFlow.interval = setTimeout(async () => {
                                     if (!this.deviceFlow.polling) return;
+                                    
+                                    clearCountdown();
+                                    this.deviceFlow.pollStatus = 'checking';
                                     
                                     const pollRes = await $api('/admin/accounts/authorize/poll', {
                                         method: 'POST',
@@ -716,9 +732,18 @@
                                     if (pollRes && pollRes.ok) {
                                         const pollData = await pollRes.json();
                                         if (pollData.status === 'pending') {
+                                            this.deviceFlow.pollStatus = 'waiting';
                                             schedulePoll(intervalMs);
                                         } else if (pollData.status === 'slow_down') {
-                                            schedulePoll((pollData.interval ?? (intervalMs / 1000 + 5)) * 1000);
+                                            this.deviceFlow.pollStatus = 'slow_down';
+                                            const nextInterval = (pollData.interval ?? (intervalMs / 1000 + 5));
+                                            this.deviceFlow.pollCountdown = nextInterval;
+                                            this.deviceFlow.countdownInterval = setInterval(() => {
+                                                if (this.deviceFlow.pollCountdown > 0) {
+                                                    this.deviceFlow.pollCountdown--;
+                                                }
+                                            }, 1000);
+                                            schedulePoll(nextInterval * 1000);
                                         } else if (pollData.status === 'expired') {
                                             this.stopPolling();
                                             this.showDeviceFlow = false;
@@ -730,6 +755,7 @@
                                             this.fetchAccounts();
                                         }
                                     } else {
+                                        this.deviceFlow.pollStatus = 'waiting';
                                         schedulePoll(intervalMs);
                                     }
                                 }, intervalMs);
@@ -753,6 +779,9 @@
                 stopPolling() {
                     if (this.deviceFlow.interval) {
                         clearTimeout(this.deviceFlow.interval);
+                    }
+                    if (this.deviceFlow.countdownInterval) {
+                        clearInterval(this.deviceFlow.countdownInterval);
                     }
                     this.deviceFlow.polling = false;
                 },
