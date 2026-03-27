@@ -491,9 +491,9 @@
                     </div>
 
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Distribution</h3>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Load Distribution</h3>
                         <div class="h-64 flex justify-center">
-                            <canvas id="chartModels"></canvas>
+                            <canvas id="chartAccountDist"></canvas>
                         </div>
                     </div>
 
@@ -531,8 +531,13 @@
 
                 <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex gap-4 items-end">
                     <div class="flex-1">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
-                        <input type="text" x-model="filters.model" @keydown.enter="applyFilters()" placeholder="e.g. gpt-4" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                        <select x-model="filters.api_key_id" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                            <option value="">All</option>
+                            <template x-for="k in apiKeys" :key="k.id">
+                                <option :value="k.id" x-text="k.name"></option>
+                            </template>
+                        </select>
                     </div>
                     <div class="flex-1">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Status Code</label>
@@ -553,7 +558,6 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Timestamp</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API Key</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
                                 </tr>
@@ -564,11 +568,6 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="formatTime(item.created_at)"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500" x-text="item.api_key_name || '-'"></td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" x-text="item.account_name || '-'"></td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                            <div class="flex items-center gap-2">
-                                                <span x-text="item.model"></span>
-                                            </div>
-                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
                                                   :class="statusColor(item.status_code)"
@@ -580,7 +579,7 @@
                                     </tr>
                                 </template>
                                 <tr x-show="items.length === 0 && !loading">
-                                    <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">No requests found.</td>
+                                    <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No requests found.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -964,7 +963,6 @@
                 period: 'this_month',
                 loading: false,
                 trendData: [],
-                modelData: [],
                 accountData: [],
                 keyData: [],
                 statusData: [],
@@ -979,15 +977,13 @@
                 async fetchAll() {
                     this.loading = true;
                     try {
-                        const [trendRes, modelRes, accountRes, keyRes, statusRes] = await Promise.all([
+                        const [trendRes, accountRes, keyRes, statusRes] = await Promise.all([
                             $api(`/admin/stats/timeseries?interval=hour&period=${this.period}`),
-                            $api(`/admin/stats?group_by=model&period=${this.period}`),
                             $api(`/admin/stats?group_by=account&period=${this.period}`),
                             $api(`/admin/stats?group_by=api_key&period=${this.period}`),
                             $api(`/admin/stats?group_by=status_code&period=${this.period}`)
                         ]);
                         if (trendRes?.ok) this.trendData = await trendRes.json();
-                        if (modelRes?.ok) this.modelData = await modelRes.json();
                         if (accountRes?.ok) this.accountData = await accountRes.json();
                         if (keyRes?.ok) this.keyData = await keyRes.json();
                         if (statusRes?.ok) this.statusData = await statusRes.json();
@@ -1028,15 +1024,15 @@
                         });
                     }
 
-                    if (_charts.models) _charts.models.destroy();
-                    const modelsCtx = document.getElementById('chartModels');
-                    if (modelsCtx) {
-                        _charts.models = new Chart(modelsCtx, {
+                    if (_charts.accountDist) _charts.accountDist.destroy();
+                    const accountDistCtx = document.getElementById('chartAccountDist');
+                    if (accountDistCtx) {
+                        _charts.accountDist = new Chart(accountDistCtx, {
                             type: 'doughnut',
                             data: {
-                                labels: this.modelData.map(d => d.label || 'Unknown'),
+                                labels: this.accountData.map(d => d.label || 'Unknown'),
                                 datasets: [{
-                                    data: this.modelData.map(d => d.count),
+                                    data: this.accountData.map(d => d.count),
                                     backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
                                 }]
                             },
@@ -1112,20 +1108,26 @@
                 total: 0,
                 page: 1,
                 limit: 50,
-                filters: { model: '', status_code: '' },
+                filters: { api_key_id: '', status_code: '' },
+                apiKeys: [],
                 loading: false,
                 async init() {
                     this.$watch('$store.router.page', (val) => {
-                        if (val === 'requests') this.fetchLog();
+                        if (val === 'requests') { this.fetchKeys(); this.fetchLog(); }
                     });
                     if (Alpine.store('router').page === 'requests') {
+                        this.fetchKeys();
                         this.fetchLog();
                     }
+                },
+                async fetchKeys() {
+                    const res = await $api('/admin/keys');
+                    if (res && res.ok) this.apiKeys = await res.json();
                 },
                 async fetchLog() {
                     this.loading = true;
                     const params = new URLSearchParams({ page: this.page, limit: this.limit });
-                    if (this.filters.model) params.append('model', this.filters.model);
+                    if (this.filters.api_key_id) params.append('api_key_id', this.filters.api_key_id);
                     if (this.filters.status_code) params.append('status_code', this.filters.status_code);
                     try {
                         const res = await $api(`/admin/requests?${params}`);

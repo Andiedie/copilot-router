@@ -2,7 +2,7 @@ import { config } from '../config'
 import { db } from '../db'
 import { getAccount, getActiveAccounts, updateAccountQuota } from '../account'
 import { getToken } from '../account/token'
-import { COPILOT_HEADERS } from '../proxy/headers'
+import { COPILOT_IDENTITY_HEADERS } from '../proxy/headers'
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -25,10 +25,7 @@ export async function syncAccountQuota(
   try {
     const res = await fetch(`${config.githubApiBase}/copilot_internal/user`, {
       headers: {
-        'Authorization': `token ${account.oauth_token}`,
-        'User-Agent': 'GitHubCopilotChat/0.26.7',
-        'Editor-Version': 'vscode/1.99.3',
-        'Editor-Plugin-Version': 'copilot-chat/0.26.7',
+        'authorization': `token ${account.oauth_token}`,
       },
     })
 
@@ -94,9 +91,9 @@ export async function testAccount(
     const res = await fetch(`${config.copilotApiBase}/chat/completions`, {
       method: 'POST',
       headers: {
-        ...COPILOT_HEADERS,
-        'Authorization': `Bearer ${jwt}`,
-        'Content-Type': 'application/json',
+        ...COPILOT_IDENTITY_HEADERS,
+        'authorization': `Bearer ${jwt}`,
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         model,

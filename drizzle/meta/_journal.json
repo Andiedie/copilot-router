@@ -8,6 +8,13 @@
       "when": 1774589367711,
       "tag": "0000_mushy_valeria_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1774627256349,
+      "tag": "0001_robust_silvermane",
+      "breakpoints": true
     }
   ]
 }

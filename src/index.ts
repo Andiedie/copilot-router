@@ -23,7 +23,7 @@ app.all("/*", proxyHandler)
 Bun.serve({
   port: config.port,
   fetch: app.fetch,
-  idleTimeout: 300,
+  idleTimeout: 0,
 })
 
 console.log(`copilot-router listening on http://localhost:${config.port}`)

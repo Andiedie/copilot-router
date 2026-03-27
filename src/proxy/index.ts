@@ -5,18 +5,6 @@ import { config } from "../config"
 import { buildUpstreamHeaders } from "./headers"
 import { logRequest } from "./logger"
 
-function buildSafeResponseHeaders(upstreamHeaders: Headers): Headers {
-  const responseHeaders = new Headers()
-  for (const [key, value] of upstreamHeaders.entries()) {
-    const lower = key.toLowerCase()
-    if (lower === "transfer-encoding" || lower === "connection") {
-      continue
-    }
-    responseHeaders.set(key, value)
-  }
-  return responseHeaders
-}
-
 export async function proxyHandler(c: Context) {
   const startTime = performance.now()
 
@@ -26,13 +14,6 @@ export async function proxyHandler(c: Context) {
 
   const apiKey = (c as any).get("apiKey") as { id: string } | undefined
   const originalUrl = new URL(c.req.url)
-  const upstreamPath = originalUrl.pathname.startsWith("/v1")
-    ? originalUrl.pathname.slice(3)
-    : originalUrl.pathname
-
-  const hasBody = c.req.method !== "GET" && c.req.method !== "HEAD"
-  const bodyText = hasBody ? await c.req.text() : ""
-  const model = /"model"\s*:\s*"([^"]+)"/.exec(bodyText)?.[1] ?? "unknown"
 
   const account = await selectAccount()
   if (!account) {
@@ -41,7 +22,6 @@ export async function proxyHandler(c: Context) {
       logRequest({
         apiKeyId: apiKey.id,
         accountId: null,
-        model,
         statusCode: 503,
         durationMs,
         error: "No available accounts",
@@ -57,7 +37,6 @@ export async function proxyHandler(c: Context) {
       logRequest({
         apiKeyId: apiKey.id,
         accountId: account.id,
-        model,
         statusCode: 502,
         durationMs,
         error: "Failed to get token for account",
@@ -66,7 +45,7 @@ export async function proxyHandler(c: Context) {
     return c.json({ error: "Failed to get token for account" }, 502)
   }
 
-  const upstreamUrl = `${config.copilotApiBase}${upstreamPath}${originalUrl.search}`
+  const upstreamUrl = `${config.copilotApiBase}${originalUrl.pathname}${originalUrl.search}`
   const headers = buildUpstreamHeaders(c.req.raw.headers, jwt)
 
   let upstreamRes: Response
@@ -74,7 +53,7 @@ export async function proxyHandler(c: Context) {
     upstreamRes = await fetch(upstreamUrl, {
       method: c.req.method,
       headers,
-      body: hasBody ? bodyText : undefined,
+      body: c.req.raw.body,
       // @ts-ignore duplex is required by some runtimes for streamed request body
       duplex: "half",
     })
@@ -84,7 +63,6 @@ export async function proxyHandler(c: Context) {
       logRequest({
         apiKeyId: apiKey.id,
         accountId: account.id,
-        model,
         statusCode: 502,
         durationMs,
         error: String(err),
@@ -102,7 +80,6 @@ export async function proxyHandler(c: Context) {
     logRequest({
       apiKeyId: apiKey.id,
       accountId: account.id,
-      model,
       statusCode: upstreamRes.status,
       durationMs,
     })
@@ -110,6 +87,6 @@ export async function proxyHandler(c: Context) {
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
-    headers: buildSafeResponseHeaders(upstreamRes.headers),
+    headers: upstreamRes.headers,
   })
 }

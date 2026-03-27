@@ -183,11 +183,10 @@ adminApp.get('/stats/overview', async (c) => {
 adminApp.get('/stats', async (c) => {
   const query = c.req.query()
   const params: StatsParams = {
-    group_by: (query.group_by as StatsParams['group_by']) ?? 'model',
+    group_by: (query.group_by as StatsParams['group_by']) ?? 'api_key',
     from: query.from ? Number(query.from) : undefined,
     to: query.to ? Number(query.to) : undefined,
     period: query.period as StatsParams['period'],
-    model: query.model,
     api_key_id: query.api_key_id,
     account_id: query.account_id,
   }
@@ -202,7 +201,6 @@ adminApp.get('/stats/timeseries', async (c) => {
     from: query.from ? Number(query.from) : undefined,
     to: query.to ? Number(query.to) : undefined,
     period: query.period as TimeSeriesParams['period'],
-    model: query.model,
     api_key_id: query.api_key_id,
     account_id: query.account_id,
   }
@@ -217,7 +215,6 @@ adminApp.get('/requests', async (c) => {
     limit: query.limit ? Number(query.limit) : 50,
     api_key_id: query.api_key_id,
     account_id: query.account_id,
-    model: query.model,
     status_code: query.status_code ? Number(query.status_code) : undefined,
   }
   const log = await getRequestLog(params)

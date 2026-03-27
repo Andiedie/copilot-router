@@ -5,7 +5,6 @@ import { requests } from "../db/schema"
 export interface LogRequestParams {
   apiKeyId: string
   accountId: string | null
-  model: string
   statusCode: number
   durationMs: number
   error?: string | null
@@ -21,7 +20,6 @@ export function logRequest(params: LogRequestParams): void {
           id: nanoid(),
           api_key_id: params.apiKeyId,
           account_id: params.accountId,
-          model: params.model,
           status_code: params.statusCode,
           duration_ms: params.durationMs,
           error: params.error ?? null,

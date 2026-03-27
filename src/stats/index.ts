@@ -12,11 +12,10 @@ export interface OverviewResult {
 }
 
 export interface StatsParams {
-  group_by: 'model' | 'api_key' | 'account' | 'hour' | 'day' | 'status_code'
+  group_by: 'api_key' | 'account' | 'hour' | 'day' | 'status_code'
   from?: number
   to?: number
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
-  model?: string
   api_key_id?: string
   account_id?: string
 }
@@ -31,7 +30,6 @@ export interface TimeSeriesParams {
   from?: number
   to?: number
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
-  model?: string
   api_key_id?: string
   account_id?: string
 }
@@ -46,7 +44,6 @@ export interface RequestLogParams {
   limit: number
   api_key_id?: string
   account_id?: string
-  model?: string
   status_code?: number
 }
 
@@ -55,7 +52,6 @@ export interface RequestLogResult {
     id: string
     api_key_name: string | null
     account_name: string | null
-    model: string | null
     status_code: number | null
     duration_ms: number | null
     error: string | null
@@ -101,13 +97,12 @@ function resolveTimeRange(params: { from?: number; to?: number; period?: Period 
   return null
 }
 
-function buildWhereClause(range: { from: number; to: number } | null, filters: { model?: string; api_key_id?: string; account_id?: string; status_code?: number }): string {
+function buildWhereClause(range: { from: number; to: number } | null, filters: { api_key_id?: string; account_id?: string; status_code?: number }): string {
   const clauses: string[] = []
   if (range) {
     clauses.push(`r.created_at >= ${range.from}`)
     clauses.push(`r.created_at <= ${range.to}`)
   }
-  if (filters.model) clauses.push(`r.model = '${escSql(filters.model)}'`)
   if (filters.api_key_id) clauses.push(`r.api_key_id = '${escSql(filters.api_key_id)}'`)
   if (filters.account_id) clauses.push(`r.account_id = '${escSql(filters.account_id)}'`)
   if (filters.status_code != null) clauses.push(`r.status_code = ${Number(filters.status_code)}`)
@@ -173,10 +168,6 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
   let groupExpr: string
 
   switch (params.group_by) {
-    case 'model':
-      selectExpr = `COALESCE(r.model, 'unknown') as label`
-      groupExpr = 'r.model'
-      break
     case 'api_key':
       selectExpr = `COALESCE(k.name, r.api_key_id) as label`
       joinClause = 'LEFT JOIN api_keys k ON k.id = r.api_key_id'
@@ -252,7 +243,6 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
   const offset = (page - 1) * limit
 
   const where = buildWhereClause(null, {
-    model: params.model,
     api_key_id: params.api_key_id,
     account_id: params.account_id,
     status_code: params.status_code,
@@ -267,7 +257,6 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
       r.id,
       k.name as api_key_name,
       a.name as account_name,
-      r.model,
       r.status_code, r.duration_ms,
       r.error, r.created_at
     FROM requests r
@@ -282,7 +271,6 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
     id: string
     api_key_name: string | null
     account_name: string | null
-    model: string | null
     status_code: number | null
     duration_ms: number | null
     error: string | null

@@ -1,34 +1,37 @@
-export const COPILOT_HEADERS = {
-  "User-Agent": "GitHubCopilotChat/0.26.7",
-  "Editor-Version": "vscode/1.99.3",
-  "Editor-Plugin-Version": "copilot-chat/0.26.7",
-  "Copilot-Integration-Id": "vscode-chat",
-} as const
+// Copilot client identity headers — injected only when the client hasn't already provided them.
+// Values reflect the latest VS Code Copilot Chat release (v0.42.2026032501, VS Code 1.114.0).
+export const COPILOT_IDENTITY_HEADERS: Record<string, string> = {
+  "user-agent":              "GitHubCopilotChat/0.42.2026032501",
+  "editor-version":          "vscode/1.114.0",
+  "editor-plugin-version":   "copilot-chat/0.42.2026032501",
+  "copilot-integration-id":  "vscode-chat",
+}
 
-const PASSTHROUGH_HEADERS = [
-  "content-type",
-  "accept",
-  "openai-intent",
-  "x-initiator",
-  "copilot-vision-request",
-  "x-request-id",
-] as const
+const STRIP_REQUEST_HEADERS = new Set([
+  "host",
+  "connection",
+  "authorization",
+])
 
 export function buildUpstreamHeaders(
   clientHeaders: Headers,
   jwt: string,
 ): Record<string, string> {
-  const headers: Record<string, string> = {
-    ...COPILOT_HEADERS,
-    Authorization: `Bearer ${jwt}`,
-  }
+  const headers: Record<string, string> = {}
 
-  for (const name of PASSTHROUGH_HEADERS) {
-    const value = clientHeaders.get(name)
-    if (value) {
-      headers[name] = value
+  for (const [key, value] of clientHeaders.entries()) {
+    if (!STRIP_REQUEST_HEADERS.has(key.toLowerCase())) {
+      headers[key.toLowerCase()] = value
     }
   }
+
+  for (const [key, value] of Object.entries(COPILOT_IDENTITY_HEADERS)) {
+    if (!headers[key]) {
+      headers[key] = value
+    }
+  }
+
+  headers["authorization"] = `Bearer ${jwt}`
 
   return headers
 }

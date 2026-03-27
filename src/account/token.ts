@@ -1,5 +1,6 @@
 import { config } from '../config'
 import { getAccount, setAccountStatus } from './index'
+import { COPILOT_IDENTITY_HEADERS } from '../proxy/headers'
 
 interface CachedToken {
   token: string
@@ -19,10 +20,8 @@ export async function exchangeToken(oauth_token: string): Promise<{
 }> {
   const res = await fetch(`${config.githubApiBase}/copilot_internal/v2/token`, {
     headers: {
-      'Authorization': `token ${oauth_token}`,
-      'User-Agent': 'GitHubCopilotChat/0.26.7',
-      'Editor-Version': 'vscode/1.99.3',
-      'Editor-Plugin-Version': 'copilot-chat/0.26.7',
+      ...COPILOT_IDENTITY_HEADERS,
+      'authorization': `token ${oauth_token}`,
     },
   })
   if (!res.ok) {
