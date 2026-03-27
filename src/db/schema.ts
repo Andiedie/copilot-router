@@ -18,6 +18,7 @@ export const api_keys = sqliteTable("api_keys", {
   key: text("key").notNull(),
   name: text("name").notNull(),
   status: text("status").notNull().default("active"),
+  account_id: text("account_id"),
   created_at: integer("created_at").notNull(),
   last_used_at: integer("last_used_at"),
   total_requests: integer("total_requests").notNull().default(0),

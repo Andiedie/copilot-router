@@ -15,6 +15,13 @@
       "when": 1774627256349,
       "tag": "0001_robust_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1774631307982,
+      "tag": "0002_bent_warbound",
+      "breakpoints": true
     }
   ]
 }

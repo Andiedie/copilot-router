@@ -388,6 +388,7 @@
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Key</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bound Account</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Requests</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Used</th>
@@ -401,6 +402,17 @@
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
                                         <span x-text="key.key.slice(0, 10) + '...' + key.key.slice(-4)"></span>
                                         <button @click="navigator.clipboard.writeText(key.key); Alpine.store('toasts').add('Copied!', 'success')" class="ml-2 text-xs text-blue-600 hover:text-blue-800">Copy</button>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <template x-if="key.account_id">
+                                            <span class="inline-flex items-center gap-1">
+                                                <span x-text="accountName(key.account_id)"></span>
+                                                <button @click="clearBinding(key.id)" class="text-xs text-gray-400 hover:text-red-600" title="Clear binding">✕</button>
+                                            </span>
+                                        </template>
+                                        <template x-if="!key.account_id">
+                                            <span class="text-gray-400">—</span>
+                                        </template>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
@@ -421,7 +433,7 @@
                                 </tr>
                             </template>
                             <tr x-show="keys.length === 0 && !loading">
-                                <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">No API keys found.</td>
+                                <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500">No API keys found.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -869,6 +881,7 @@
         function keysPage() {
             return {
                 keys: [],
+                accounts: [],
                 loading: false,
                 newKeyName: '',
                 createdKey: null,
@@ -876,24 +889,31 @@
                 configData: null,
                 async init() {
                     this.$watch('$store.router.page', (val) => {
-                        if (val === 'keys') this.fetchKeys();
+                        if (val === 'keys') this.fetchAll();
                     });
                     if (Alpine.store('router').page === 'keys') {
-                        this.fetchKeys();
+                        this.fetchAll();
                     }
                 },
-                async fetchKeys() {
+                async fetchAll() {
                     this.loading = true;
                     try {
-                        const res = await $api('/admin/keys');
-                        if (res && res.ok) {
-                            this.keys = await res.json();
-                        }
+                        const [keysRes, accountsRes] = await Promise.all([
+                            $api('/admin/keys'),
+                            $api('/admin/accounts')
+                        ]);
+                        if (keysRes?.ok) this.keys = await keysRes.json();
+                        if (accountsRes?.ok) this.accounts = await accountsRes.json();
                     } catch (err) {
                         console.error('Failed to fetch keys', err);
                     } finally {
                         this.loading = false;
                     }
+                },
+                accountName(accountId) {
+                    if (!accountId) return null;
+                    const acct = this.accounts.find(a => a.id === accountId);
+                    return acct ? acct.name : accountId.slice(0, 8) + '...';
                 },
                 async createKey() {
                     if (!this.newKeyName) return;
@@ -905,7 +925,7 @@
                         if (res && res.ok) {
                             this.createdKey = await res.json();
                             this.newKeyName = '';
-                            this.fetchKeys();
+                            this.fetchAll();
                             Alpine.store('toasts').add('API Key created', 'success');
                         }
                     } catch (err) {
@@ -932,7 +952,7 @@
                         });
                         if (res && res.ok) {
                             Alpine.store('toasts').add(status === 'active' ? 'API Key enabled' : 'API Key disabled', 'success');
-                            this.fetchKeys();
+                            this.fetchAll();
                         }
                     } catch (err) {
                         console.error('Failed to update key status', err);
@@ -947,10 +967,21 @@
                             if (this.createdKey && this.createdKey.id === id) {
                                 this.createdKey = null;
                             }
-                            this.fetchKeys();
+                            this.fetchAll();
                         }
                     } catch (err) {
                         console.error('Failed to delete key', err);
+                    }
+                },
+                async clearBinding(id) {
+                    try {
+                        const res = await $api(`/admin/keys/${id}/clear-binding`, { method: 'POST' });
+                        if (res && res.ok) {
+                            Alpine.store('toasts').add('Binding cleared', 'success');
+                            this.fetchAll();
+                        }
+                    } catch (err) {
+                        console.error('Failed to clear binding', err);
                     }
                 }
             }

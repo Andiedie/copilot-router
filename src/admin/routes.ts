@@ -3,7 +3,7 @@ import { config } from '../config'
 import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatus } from '../account'
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
-import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus } from '../auth'
+import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
 import { getOverview, getStats, getTimeSeries, getRequestLog } from '../stats'
 import { getPoolStatus } from '../account/pool'
 import type { StatsParams, TimeSeriesParams, RequestLogParams } from '../stats'
@@ -136,6 +136,11 @@ adminApp.patch('/keys/:id', async (c) => {
 
 adminApp.delete('/keys/:id', async (c) => {
   await deleteApiKey(c.req.param('id'))
+  return c.body(null, 204)
+})
+
+adminApp.post('/keys/:id/clear-binding', async (c) => {
+  await clearApiKeyBinding(c.req.param('id'))
   return c.body(null, 204)
 })
 

@@ -27,6 +27,7 @@ export async function listApiKeys() {
       key: api_keys.key,
       name: api_keys.name,
       status: api_keys.status,
+      account_id: api_keys.account_id,
       created_at: api_keys.created_at,
       last_used_at: api_keys.last_used_at,
       total_requests: api_keys.total_requests,
@@ -42,6 +43,10 @@ export async function setApiKeyStatus(id: string, status: "active" | "disabled")
 
 export async function deleteApiKey(id: string) {
   await db.delete(api_keys).where(eq(api_keys.id, id))
+}
+
+export async function clearApiKeyBinding(id: string) {
+  await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.id, id))
 }
 
 export async function validateApiKey(key: string) {

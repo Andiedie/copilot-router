@@ -15,7 +15,7 @@ export async function proxyHandler(c: Context) {
   const apiKey = (c as any).get("apiKey") as { id: string } | undefined
   const originalUrl = new URL(c.req.url)
 
-  const account = await selectAccount()
+  const account = await selectAccount(apiKey?.id)
   if (!account) {
     const durationMs = Math.round(performance.now() - startTime)
     if (apiKey) {

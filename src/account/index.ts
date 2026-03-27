@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
 import { db } from '../db'
-import { accounts } from '../db/schema'
+import { accounts, api_keys } from '../db/schema'
 
 type AccountStatus = 'active' | 'disabled' | 'error'
 
@@ -70,9 +70,16 @@ export async function setAccountStatus(id: string, status: AccountStatus) {
       updated_at: now,
     })
     .where(eq(accounts.id, id))
+
+  // Clear API key affinity bindings when account is no longer active
+  if (status !== 'active') {
+    await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.account_id, id))
+  }
 }
 
 export async function deleteAccount(id: string) {
+  // Clear API key affinity bindings before deleting
+  await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.account_id, id))
   await db.delete(accounts).where(eq(accounts.id, id))
 }
 

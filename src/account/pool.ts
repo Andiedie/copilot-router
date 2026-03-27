@@ -1,8 +1,31 @@
-import { getActiveAccounts } from './index'
+import { eq } from 'drizzle-orm'
+import { getActiveAccounts, getAccount } from './index'
+import { db } from '../db'
+import { api_keys } from '../db/schema'
 
 let rrCounter = 0
 
-export async function selectAccount() {
+export async function selectAccount(apiKeyId?: string) {
+  if (apiKeyId) {
+    const [keyRow] = await db
+      .select({ account_id: api_keys.account_id })
+      .from(api_keys)
+      .where(eq(api_keys.id, apiKeyId))
+
+    if (keyRow?.account_id) {
+      const account = await getAccount(keyRow.account_id)
+      if (account && account.status === 'active') {
+        const isUnlimited = account.quota_limit === 0 || account.quota_limit === -1
+        const hasQuota = isUnlimited || (account.quota_limit - account.quota_used) > 0
+        if (hasQuota) {
+          return account
+        }
+      }
+      // Stale binding — clear it, fall through to normal selection
+      await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.id, apiKeyId))
+    }
+  }
+
   const active = await getActiveAccounts()
   if (active.length === 0) return null
 
@@ -23,6 +46,11 @@ export async function selectAccount() {
 
   const selected = candidates[rrCounter % candidates.length]
   rrCounter++
+
+  if (apiKeyId && selected) {
+    await db.update(api_keys).set({ account_id: selected.id }).where(eq(api_keys.id, apiKeyId))
+  }
+
   return selected
 }
 
