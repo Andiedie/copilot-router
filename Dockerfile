@@ -13,7 +13,6 @@ FROM oven/bun:1-alpine AS release
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN mkdir -p /app/data && chown -R bun:bun /app/data
-USER bun
+RUN mkdir -p /app/data
 EXPOSE 4141
 CMD ["sh", "-c", "bun src/db/migrate.ts && bun src/index.ts"]
