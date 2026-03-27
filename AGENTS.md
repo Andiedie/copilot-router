@@ -43,7 +43,7 @@ copilot-router/
 
 | Symbol | File | Role |
 |--------|------|------|
-| `proxyHandler` | `src/proxy/index.ts` | Core request forwarder; strips `/v1` prefix, selects account, gets JWT, calls upstream |
+| `proxyHandler` | `src/proxy/index.ts` | Core request forwarder; passes path as-is (no `/v1` strip), selects account, gets JWT, calls upstream |
 | `selectAccount` | `src/account/pool.ts` | Weighted round-robin; accounts within 80% of best quota are candidates |
 | `getToken` | `src/account/token.ts` | In-memory JWT cache with in-flight dedup to avoid parallel refresh races |
 | `exchangeToken` | `src/account/token.ts` | OAuth token → Copilot JWT via `/copilot_internal/v2/token` |

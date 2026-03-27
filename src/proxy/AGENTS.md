@@ -13,8 +13,8 @@ Core request forwarding to `api.githubcopilot.com`. Three files: handler, header
 
 ## KEY BEHAVIORS
 
-**Path rewriting** (`index.ts`):
-- Strips `/v1` prefix before forwarding: `/v1/chat/completions` → `/chat/completions`.
+**Path forwarding** (`index.ts`):
+- Path is forwarded as-is (no prefix stripping): `/v1/chat/completions` stays `/v1/chat/completions` upstream.
 - Both `/v1/*` and `/*` routes map to `proxyHandler`.
 
 **Header policy** (`headers.ts`):
