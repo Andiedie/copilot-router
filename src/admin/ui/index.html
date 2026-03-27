@@ -914,17 +914,15 @@
                         Alpine.store('toasts').add('Failed to create API Key', 'error');
                     }
                 },
-                async exportConfig(id) {
-                    try {
-                        const res = await $api(`/admin/keys/${id}/opencode-config`);
-                        if (res && res.ok) {
-                            this.configData = await res.json();
-                            this.showConfigModal = true;
-                        }
-                    } catch (err) {
-                        console.error('Failed to export config', err);
-                        Alpine.store('toasts').add('Failed to export config', 'error');
-                    }
+                exportConfig(id) {
+                    const key = this.keys.find(k => k.id === id);
+                    if (!key) return;
+                    const baseURL = window.location.origin;
+                    this.configData = {
+                        opencodeJsonText: JSON.stringify({ provider: { 'github-copilot': { options: { baseURL } } } }, null, 2),
+                        authJsonText: JSON.stringify({ 'github-copilot': { type: 'oauth', refresh: key.key, access: key.key, expires: 0 } }, null, 2),
+                    };
+                    this.showConfigModal = true;
                 },
                 async setKeyStatus(id, status) {
                     try {
