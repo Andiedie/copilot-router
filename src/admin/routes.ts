@@ -148,7 +148,7 @@ adminApp.get('/keys/:id/opencode-config', async (c) => {
   }
 
   const host = c.req.header('host')
-  const baseURL = host ? `http://${host}/v1` : `http://localhost:${config.port}/v1`
+  const baseURL = host ? `http://${host}` : `http://localhost:${config.port}`
 
   const opencodeJson = {
     provider: {
