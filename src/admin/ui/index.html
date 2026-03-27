@@ -703,31 +703,38 @@
                             this.deviceFlow = { ...data, polling: true, interval: null };
                             this.showDeviceFlow = true;
                             
-                            this.deviceFlow.interval = setInterval(async () => {
+                            const schedulePoll = (intervalMs) => {
                                 if (!this.deviceFlow.polling) return;
-                                
-                                const pollRes = await $api('/admin/accounts/authorize/poll', {
-                                    method: 'POST',
-                                    body: JSON.stringify({ device_code: this.deviceFlow.device_code })
-                                });
-                                
-                                if (pollRes && pollRes.ok) {
-                                    const pollData = await pollRes.json();
-                                    if (pollData.status === 'pending') {
-                                        // continue polling
-                                    } else if (pollData.status === 'expired') {
-                                        this.stopPolling();
-                                        this.showDeviceFlow = false;
-                                        Alpine.store('toasts').add('Authorization expired', 'error');
-                                    } else if (pollData.status === 'success') {
-                                        // Success, account returned
-                                        this.stopPolling();
-                                        this.showDeviceFlow = false;
-                                        Alpine.store('toasts').add('Account added successfully', 'success');
-                                        this.fetchAccounts();
+                                this.deviceFlow.interval = setTimeout(async () => {
+                                    if (!this.deviceFlow.polling) return;
+                                    
+                                    const pollRes = await $api('/admin/accounts/authorize/poll', {
+                                        method: 'POST',
+                                        body: JSON.stringify({ device_code: this.deviceFlow.device_code })
+                                    });
+                                    
+                                    if (pollRes && pollRes.ok) {
+                                        const pollData = await pollRes.json();
+                                        if (pollData.status === 'pending') {
+                                            schedulePoll(intervalMs);
+                                        } else if (pollData.status === 'slow_down') {
+                                            schedulePoll((pollData.interval ?? (intervalMs / 1000 + 5)) * 1000);
+                                        } else if (pollData.status === 'expired') {
+                                            this.stopPolling();
+                                            this.showDeviceFlow = false;
+                                            Alpine.store('toasts').add('Authorization expired', 'error');
+                                        } else if (pollData.status === 'success') {
+                                            this.stopPolling();
+                                            this.showDeviceFlow = false;
+                                            Alpine.store('toasts').add('Account added successfully', 'success');
+                                            this.fetchAccounts();
+                                        }
+                                    } else {
+                                        schedulePoll(intervalMs);
                                     }
-                                }
-                            }, 5000);
+                                }, intervalMs);
+                            };
+                            schedulePoll((data.interval ?? 5) * 1000);
                             
                             // 5 minute timeout
                             setTimeout(() => {
@@ -745,7 +752,7 @@
                 },
                 stopPolling() {
                     if (this.deviceFlow.interval) {
-                        clearInterval(this.deviceFlow.interval);
+                        clearTimeout(this.deviceFlow.interval);
                     }
                     this.deviceFlow.polling = false;
                 },
