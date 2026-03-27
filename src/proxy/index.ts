@@ -1,6 +1,7 @@
 import type { Context } from "hono"
+import { setAccountStatus } from "../account"
 import { selectAccount } from "../account/pool"
-import { getToken } from "../account/token"
+import { clearTokenCache, getToken } from "../account/token"
 import { config } from "../config"
 import { buildUpstreamHeaders } from "./headers"
 import { logRequest } from "./logger"
@@ -72,6 +73,14 @@ export async function proxyHandler(c: Context) {
   }
 
   const durationMs = Math.round(performance.now() - startTime)
+
+  if (upstreamRes.status === 429 && upstreamRes.headers.get("x-ratelimit-exceeded") === "quota_exceeded") {
+    void (async () => {
+      await setAccountStatus(account.id, "disabled")
+      clearTokenCache(account.id)
+      console.warn(`[proxy] Account ${account.github_login ?? account.id} quota exhausted — auto-disabled`)
+    })()
+  }
 
   ;(c as any).set("proxyAccount", account)
   ;(c as any).set("proxyStatus", upstreamRes.status)
