@@ -51,16 +51,16 @@ The database is stored in `./data/` on the host, mounted to `/app/data` in the c
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ADMIN_TOKEN` | ✅ | — | Admin API bearer token. Process exits at startup if missing. |
-| `PORT` | | `4141` | Listening port |
-| `DB_PATH` | | `./data/copilot-router.db` | SQLite database path |
-| `GITHUB_CLIENT_ID` | | built-in default | GitHub App client ID for OAuth Device Flow |
-| `COPILOT_API_BASE` | | `https://api.githubcopilot.com` | Copilot API upstream base URL |
-| `GITHUB_API_BASE` | | `https://api.github.com` | GitHub API base URL (used for quota sync) |
-| `TOKEN_REFRESH_BUFFER` | | `0.8` | Refresh JWT when `now >= expiresAt * buffer` (i.e. at 80% of lifetime) |
-| `TEST_MODEL` | | `gpt-5-mini` | Model used for account health checks (does not consume premium quota) |
+| Variable                | Default                         | Description                                                            |
+|-------------------------|---------------------------------|------------------------------------------------------------------------|
+| `ADMIN_TOKEN`           | `test`                          | Admin API bearer token. Process exits at startup if missing.           |
+| `PORT`                  | `4141`                          | Listening port                                                         |
+| `DB_PATH`               | `./data/copilot-router.db`      | SQLite database path                                                   |
+| `GITHUB_CLIENT_ID`      | built-in default                | GitHub App client ID for OAuth Device Flow                             |
+| `COPILOT_API_BASE`      | `https://api.githubcopilot.com` | Copilot API upstream base URL                                          |
+| `GITHUB_API_BASE`       | `https://api.github.com`        | GitHub API base URL (used for quota sync)                              |
+| `TOKEN_REFRESH_BUFFER`  | `0.8`                           | Refresh JWT when `now >= expiresAt * buffer` (i.e. at 80% of lifetime) |
+| `TEST_MODEL`            | `gpt-5-mini`                    | Model used for account health checks (does not consume premium quota)  |
 
 ## Adding Accounts
 

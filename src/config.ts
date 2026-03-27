@@ -1,13 +1,9 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-if (!process.env.ADMIN_TOKEN) {
-  throw new Error("ADMIN_TOKEN environment variable is required");
-}
-
 export const config = {
   port: Number(process.env.PORT ?? 4141),
-  adminToken: process.env.ADMIN_TOKEN,
+  adminToken: process.env.ADMIN_TOKEN ?? 'test',
   dbPath: process.env.DB_PATH ?? "./data/copilot-router.db",
   githubClientId: process.env.GITHUB_CLIENT_ID ?? "Iv1.b507a08c87ecfe98",
   copilotApiBase:
