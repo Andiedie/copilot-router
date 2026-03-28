@@ -30,6 +30,10 @@ export const requests = sqliteTable(
     id: text("id").primaryKey(),
     api_key_id: text("api_key_id").notNull(),
     account_id: text("account_id"),
+    model: text("model"),
+    endpoint: text("endpoint"),
+    input_tokens: integer("input_tokens"),
+    output_tokens: integer("output_tokens"),
     status_code: integer("status_code"),
     duration_ms: integer("duration_ms"),
     error: text("error"),
@@ -38,6 +42,7 @@ export const requests = sqliteTable(
   (t) => [
     index("idx_requests_api_key_id").on(t.api_key_id),
     index("idx_requests_account_id").on(t.account_id),
+    index("idx_requests_model").on(t.model),
     index("idx_requests_created_at").on(t.created_at),
     index("idx_requests_status_code").on(t.status_code),
   ],
