@@ -16,7 +16,7 @@ Drizzle ORM singleton + SQLite schema + migration runner. Three files, rarely to
 |-------|------------|-------|
 | `accounts` | `id`, `oauth_token`, `status`, `quota_limit`, `quota_used` | `quota_limit=0` legacy unlimited; `-1` new unlimited |
 | `api_keys` | `id`, `key`, `key_hash`, `key_prefix`, `status` | `key` only returned at creation |
-| `requests` | `api_key_id`, `account_id`, `model`, `status_code`, `duration_ms` | Indexed on `api_key_id`, `account_id`, `model`, `created_at`, `status_code` |
+| `requests` | `api_key_id`, `account_id`, `model`, `endpoint`, `input_tokens`, `output_tokens`, `status_code`, `duration_ms` | All request-log columns are nullable except `api_key_id`/`created_at`; indexed on `api_key_id`, `account_id`, `model`, `created_at`, `status_code` |
 
 ## CONVENTIONS
 

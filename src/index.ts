@@ -17,7 +17,6 @@ app.get("/admin/", (c) => c.html(Bun.file(new URL('./admin/ui/index.html', impor
 app.route("/admin", adminApp)
 
 app.use("*", bearerAuth)
-app.all("/v1/*", proxyHandler)
 app.all("/*", proxyHandler)
 
 Bun.serve({

@@ -9,6 +9,7 @@ Core request forwarding to `api.githubcopilot.com`. Three files: handler, header
 | Modify forwarding logic | `index.ts` — `proxyHandler()` |
 | Add/remove passthrough headers | `headers.ts` — `PASSTHROUGH_HEADERS` array |
 | Change Copilot identity headers | `headers.ts` — `COPILOT_HEADERS` const |
+| Request/response body parsing | `body-parser.ts` |
 | Request logging | `logger.ts` — `logRequest()` |
 
 ## KEY BEHAVIORS
@@ -23,11 +24,17 @@ Core request forwarding to `api.githubcopilot.com`. Three files: handler, header
 - All other client headers are silently dropped.
 - Response: `transfer-encoding` and `connection` stripped via `buildSafeResponseHeaders`.
 
-**Model extraction**: Regex on raw request body — `/"model"\s*:\s*"([^"]+)"/`. Falls back to `"unknown"`.
+**Body Parsing** (`body-parser.ts`):
+- `extractModelFromBody(body)` — regex extraction from raw JSON text; returns `null` when no model is present or parsing fails.
+- `detectEndpoint(path)` / `isStreamableEndpoint(path)` — endpoint classification uses the raw path as-is; streamable endpoints include `/chat/completions` and `/responses`.
+- `extractRequestInfo(req, path)` — clones the request and reads body text asynchronously inside `try/catch`; returns `{ model, endpoint }` without throwing.
+- `injectStreamUsageOption(bodyText)` — the only allowed request body mutation; adds `stream_options.include_usage=true` only for streamed requests that do not already have it.
+- `extractUsageFromResponse(response, endpoint)` — reads non-stream 2xx responses from a cloned response and extracts usage/model when present.
+- `createStreamTap(endpoint, onUsage)` — byte-for-byte `TransformStream<Uint8Array, Uint8Array>` passthrough that taps SSE lines for usage while preserving chunks unchanged.
 
 **Logging** (`logger.ts`):
 - `logRequest()` returns `void` — fire-and-forget. Never `await` it.
-- Records: `api_key_id`, `account_id`, `model`, `endpoint`, `status_code`, `duration_ms`, `error`.
+- Records: `api_key_id`, `account_id`, `model`, `endpoint`, `input_tokens`, `output_tokens`, `status_code`, `duration_ms`, `error`.
 - Only logs if `apiKey` is set in context (unauthenticated requests skip logging).
 
 ## ANTI-PATTERNS
