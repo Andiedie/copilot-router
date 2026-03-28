@@ -3,6 +3,13 @@ import { setAccountStatus } from "../account"
 import { selectAccount } from "../account/pool"
 import { clearTokenCache, getToken } from "../account/token"
 import { config } from "../config"
+import {
+  createStreamTap,
+  extractModelFromBody,
+  extractUsageFromResponse,
+  injectStreamUsageOption,
+  isStreamableEndpoint,
+} from "./body-parser"
 import { buildUpstreamHeaders } from "./headers"
 import { logRequest } from "./logger"
 
@@ -46,6 +53,24 @@ export async function proxyHandler(c: Context) {
     return c.json({ error: "Failed to get token for account" }, 502)
   }
 
+  let bodyText: string | null = null
+  try {
+    bodyText = await c.req.raw.clone().text()
+  } catch {
+  }
+
+  const endpoint = originalUrl.pathname
+  const requestModel = bodyText ? extractModelFromBody(bodyText) : null
+
+  let requestBody: string | null = null
+  if (bodyText && isStreamableEndpoint(endpoint)) {
+    const injected = injectStreamUsageOption(bodyText)
+    if (injected !== null) {
+      requestBody = injected
+    }
+  }
+  const fetchBody: string | ReadableStream | null = requestBody ?? bodyText ?? c.req.raw.body
+
   const upstreamUrl = `${config.copilotApiBase}${originalUrl.pathname}${originalUrl.search}`
   const headers = buildUpstreamHeaders(c.req.raw.headers, jwt)
 
@@ -54,7 +79,7 @@ export async function proxyHandler(c: Context) {
     upstreamRes = await fetch(upstreamUrl, {
       method: c.req.method,
       headers,
-      body: c.req.raw.body,
+      body: fetchBody,
       // @ts-ignore duplex is required by some runtimes for streamed request body
       duplex: "half",
     })
@@ -85,17 +110,48 @@ export async function proxyHandler(c: Context) {
   ;(c as any).set("proxyAccount", account)
   ;(c as any).set("proxyStatus", upstreamRes.status)
 
-  if (apiKey) {
-    logRequest({
-      apiKeyId: apiKey.id,
-      accountId: account.id,
-      statusCode: upstreamRes.status,
-      durationMs,
+  const isStream = upstreamRes.headers.get("content-type")?.includes("text/event-stream") ?? false
+
+  if (isStream) {
+    let usageLogged = false
+    const tap = createStreamTap(endpoint, (usage) => {
+      if (apiKey && !usageLogged) {
+        usageLogged = true
+        const totalDurationMs = Math.round(performance.now() - startTime)
+        logRequest({
+          apiKeyId: apiKey.id,
+          accountId: account.id,
+          model: usage.model ?? requestModel,
+          endpoint,
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          statusCode: upstreamRes.status,
+          durationMs: totalDurationMs,
+        })
+      }
+    })
+    const tappedBody = upstreamRes.body?.pipeThrough(tap) ?? null
+    return new Response(tappedBody, {
+      status: upstreamRes.status,
+      headers: upstreamRes.headers,
+    })
+  } else {
+    const usageInfo = await extractUsageFromResponse(upstreamRes, endpoint)
+    if (apiKey) {
+      logRequest({
+        apiKeyId: apiKey.id,
+        accountId: account.id,
+        model: usageInfo?.model ?? requestModel,
+        endpoint,
+        inputTokens: usageInfo?.inputTokens ?? null,
+        outputTokens: usageInfo?.outputTokens ?? null,
+        statusCode: upstreamRes.status,
+        durationMs,
+      })
+    }
+    return new Response(upstreamRes.body, {
+      status: upstreamRes.status,
+      headers: upstreamRes.headers,
     })
   }
-
-  return new Response(upstreamRes.body, {
-    status: upstreamRes.status,
-    headers: upstreamRes.headers,
-  })
 }
