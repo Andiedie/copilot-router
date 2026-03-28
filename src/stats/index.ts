@@ -9,10 +9,16 @@ export interface OverviewResult {
   total_accounts: number
   active_keys: number
   quota_usage_pct: number
+  today_input_tokens: number
+  today_output_tokens: number
+  today_total_tokens: number
+  avg_duration_ms: number
+  success_rate: number
+  today_models: number
 }
 
 export interface StatsParams {
-  group_by: 'api_key' | 'account' | 'hour' | 'day' | 'status_code'
+  group_by: 'api_key' | 'account' | 'hour' | 'day' | 'status_code' | 'model'
   from?: number
   to?: number
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
@@ -55,6 +61,10 @@ export interface RequestLogResult {
     status_code: number | null
     duration_ms: number | null
     error: string | null
+    model: string | null
+    endpoint: string | null
+    input_tokens: number | null
+    output_tokens: number | null
     created_at: number
   }>
   total: number
@@ -121,11 +131,23 @@ export async function getOverview(): Promise<OverviewResult> {
     total_requests: number
     today_requests: number
     error_requests: number
+    today_input_tokens: number
+    today_output_tokens: number
+    avg_duration_ms: number
+    success_rate: number
+    today_models: number
   }>(sql`
     SELECT
       COUNT(*) as total_requests,
       SUM(CASE WHEN created_at >= ${todayStart} THEN 1 ELSE 0 END) as today_requests,
-      SUM(CASE WHEN status_code >= 400 AND created_at >= ${todayStart} THEN 1 ELSE 0 END) as error_requests
+      SUM(CASE WHEN status_code >= 400 AND created_at >= ${todayStart} THEN 1 ELSE 0 END) as error_requests,
+      SUM(CASE WHEN created_at >= ${todayStart} THEN COALESCE(input_tokens, 0) ELSE 0 END) as today_input_tokens,
+      SUM(CASE WHEN created_at >= ${todayStart} THEN COALESCE(output_tokens, 0) ELSE 0 END) as today_output_tokens,
+      ROUND(AVG(CASE WHEN created_at >= ${todayStart} AND duration_ms IS NOT NULL THEN duration_ms ELSE NULL END), 2) as avg_duration_ms,
+      CASE WHEN SUM(CASE WHEN created_at >= ${todayStart} THEN 1 ELSE 0 END) = 0 THEN 100.0
+           ELSE ROUND(SUM(CASE WHEN created_at >= ${todayStart} AND (status_code IS NULL OR status_code < 400) THEN 1.0 ELSE 0.0 END) * 100.0 / SUM(CASE WHEN created_at >= ${todayStart} THEN 1 ELSE 0 END), 2)
+      END as success_rate,
+      COUNT(DISTINCT CASE WHEN created_at >= ${todayStart} THEN model ELSE NULL END) as today_models
     FROM requests
   `)
 
@@ -156,6 +178,12 @@ export async function getOverview(): Promise<OverviewResult> {
     total_accounts: accStats?.total_accounts ?? 0,
     active_keys: keyStats?.active_keys ?? 0,
     quota_usage_pct: Math.round((accStats?.quota_usage_pct ?? 0) * 100) / 100,
+    today_input_tokens: reqStats?.today_input_tokens ?? 0,
+    today_output_tokens: reqStats?.today_output_tokens ?? 0,
+    today_total_tokens: (reqStats?.today_input_tokens ?? 0) + (reqStats?.today_output_tokens ?? 0),
+    avg_duration_ms: reqStats?.avg_duration_ms ?? 0,
+    success_rate: reqStats?.success_rate ?? 100,
+    today_models: reqStats?.today_models ?? 0,
   }
 }
 
@@ -189,6 +217,10 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
     case 'status_code':
       selectExpr = `CAST(COALESCE(r.status_code, 0) AS TEXT) as label`
       groupExpr = 'r.status_code'
+      break
+    case 'model':
+      selectExpr = `COALESCE(r.model, 'unknown') as label`
+      groupExpr = 'r.model'
       break
   }
 
@@ -237,6 +269,93 @@ export async function getTimeSeries(params: TimeSeriesParams): Promise<TimeSerie
   }))
 }
 
+export interface TokenTimeSeriesRow {
+  time: string
+  input_tokens: number
+  output_tokens: number
+}
+
+export async function getTokenTimeSeries(params: TimeSeriesParams): Promise<TokenTimeSeriesRow[]> {
+  const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
+  const where = buildWhereClause(range, params)
+
+  const fmt = params.interval === 'hour'
+    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
+    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+
+  const query = `
+    SELECT
+      ${fmt} as time,
+      SUM(COALESCE(input_tokens, 0)) as input_tokens,
+      SUM(COALESCE(output_tokens, 0)) as output_tokens
+    FROM requests r
+    ${where}
+    GROUP BY time
+    ORDER BY time ASC
+  `
+
+  const rows = db.all<{ time: string; input_tokens: number; output_tokens: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    time: r.time,
+    input_tokens: r.input_tokens ?? 0,
+    output_tokens: r.output_tokens ?? 0,
+  }))
+}
+
+export interface ModelStatsRow {
+  model: string
+  count: number
+  input_tokens: number
+  output_tokens: number
+  avg_duration_ms: number
+}
+
+export interface ModelStatsParams {
+  from?: number
+  to?: number
+  period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
+}
+
+export async function getModelStats(params: ModelStatsParams): Promise<ModelStatsRow[]> {
+  const range = resolveTimeRange(params)
+  const rangeWhere: string[] = []
+  if (range) {
+    rangeWhere.push(`r.created_at >= ${range.from}`)
+    rangeWhere.push(`r.created_at <= ${range.to}`)
+  }
+  const where = rangeWhere.length > 0 ? `WHERE ${rangeWhere.join(' AND ')}` : ''
+
+  const query = `
+    SELECT
+      COALESCE(r.model, 'unknown') as model,
+      COUNT(*) as count,
+      SUM(COALESCE(r.input_tokens, 0)) as input_tokens,
+      SUM(COALESCE(r.output_tokens, 0)) as output_tokens,
+      ROUND(AVG(CASE WHEN r.duration_ms IS NOT NULL THEN r.duration_ms ELSE NULL END), 2) as avg_duration_ms
+    FROM requests r
+    ${where}
+    GROUP BY r.model
+    ORDER BY count DESC
+  `
+
+  const rows = db.all<{
+    model: string
+    count: number
+    input_tokens: number
+    output_tokens: number
+    avg_duration_ms: number
+  }>(sql.raw(query))
+
+  return rows.map(r => ({
+    model: String(r.model ?? 'unknown'),
+    count: r.count ?? 0,
+    input_tokens: r.input_tokens ?? 0,
+    output_tokens: r.output_tokens ?? 0,
+    avg_duration_ms: r.avg_duration_ms ?? 0,
+  }))
+}
+
 export async function getRequestLog(params: RequestLogParams): Promise<RequestLogResult> {
   const page = Math.max(1, params.page)
   const limit = Math.min(100, Math.max(1, params.limit))
@@ -258,7 +377,7 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
       k.name as api_key_name,
       a.name as account_name,
       r.status_code, r.duration_ms,
-      r.error, r.created_at
+      r.error, r.model, r.endpoint, r.input_tokens, r.output_tokens, r.created_at
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.api_key_id
     LEFT JOIN accounts a ON a.id = r.account_id
@@ -274,6 +393,10 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
     status_code: number | null
     duration_ms: number | null
     error: string | null
+    model: string | null
+    endpoint: string | null
+    input_tokens: number | null
+    output_tokens: number | null
     created_at: number
   }>(sql.raw(dataQuery))
 
