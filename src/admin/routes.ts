@@ -4,7 +4,7 @@ import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatu
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
 import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
-import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats } from '../stats'
+import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries } from '../stats'
 import { getPoolStatus } from '../account/pool'
 import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams } from '../stats'
 
@@ -236,6 +236,34 @@ adminApp.get('/stats/models', async (c) => {
   }
   const models = await getModelStats(params)
   return c.json(models)
+})
+
+adminApp.get('/stats/key-model-timeseries', async (c) => {
+  const query = c.req.query()
+  const params: TimeSeriesParams = {
+    interval: (query.interval as TimeSeriesParams['interval']) ?? 'hour',
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as TimeSeriesParams['period'],
+    api_key_id: query.api_key_id,
+    account_id: query.account_id,
+  }
+  const series = await getKeyModelTimeSeries(params)
+  return c.json(series)
+})
+
+adminApp.get('/stats/model-token-timeseries', async (c) => {
+  const query = c.req.query()
+  const params: TimeSeriesParams = {
+    interval: (query.interval as TimeSeriesParams['interval']) ?? 'hour',
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as TimeSeriesParams['period'],
+    api_key_id: query.api_key_id,
+    account_id: query.account_id,
+  }
+  const series = await getModelTokenTimeSeries(params)
+  return c.json(series)
 })
 
 adminApp.get('/requests', async (c) => {

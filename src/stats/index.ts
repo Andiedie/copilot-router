@@ -356,6 +356,81 @@ export async function getModelStats(params: ModelStatsParams): Promise<ModelStat
   }))
 }
 
+export interface KeyModelTimeSeriesRow {
+  time: string
+  key_name: string
+  model: string
+  count: number
+}
+
+export async function getKeyModelTimeSeries(params: TimeSeriesParams): Promise<KeyModelTimeSeriesRow[]> {
+  const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
+  const where = buildWhereClause(range, params)
+
+  const fmt = params.interval === 'hour'
+    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
+    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+
+  const query = `
+    SELECT
+      ${fmt} as time,
+      COALESCE(k.name, r.api_key_id, 'unknown') as key_name,
+      COALESCE(r.model, 'unknown') as model,
+      COUNT(*) as count
+    FROM requests r
+    LEFT JOIN api_keys k ON k.id = r.api_key_id
+    ${where}
+    GROUP BY time, r.api_key_id, r.model
+    ORDER BY time ASC
+  `
+
+  const rows = db.all<{ time: string; key_name: string; model: string; count: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    time: r.time,
+    key_name: String(r.key_name ?? 'unknown'),
+    model: String(r.model ?? 'unknown'),
+    count: r.count ?? 0,
+  }))
+}
+
+export interface ModelTokenTimeSeriesRow {
+  time: string
+  model: string
+  input_tokens: number
+  output_tokens: number
+}
+
+export async function getModelTokenTimeSeries(params: TimeSeriesParams): Promise<ModelTokenTimeSeriesRow[]> {
+  const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
+  const where = buildWhereClause(range, params)
+
+  const fmt = params.interval === 'hour'
+    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
+    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+
+  const query = `
+    SELECT
+      ${fmt} as time,
+      COALESCE(r.model, 'unknown') as model,
+      SUM(COALESCE(input_tokens, 0)) as input_tokens,
+      SUM(COALESCE(output_tokens, 0)) as output_tokens
+    FROM requests r
+    ${where}
+    GROUP BY time, r.model
+    ORDER BY time ASC
+  `
+
+  const rows = db.all<{ time: string; model: string; input_tokens: number; output_tokens: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    time: r.time,
+    model: String(r.model ?? 'unknown'),
+    input_tokens: r.input_tokens ?? 0,
+    output_tokens: r.output_tokens ?? 0,
+  }))
+}
+
 export async function getRequestLog(params: RequestLogParams): Promise<RequestLogResult> {
   const page = Math.max(1, params.page)
   const limit = Math.min(100, Math.max(1, params.limit))

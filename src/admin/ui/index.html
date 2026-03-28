@@ -525,24 +525,17 @@
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Load Distribution</h3>
-                        <div class="h-64 flex justify-center">
-                            <canvas id="chartAccountDist"></canvas>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key × Model Usage</h3>
+                        <div class="h-72">
+                            <canvas id="chartKeyModel"></canvas>
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Status Code Distribution</h3>
-                        <div class="h-64 flex justify-center">
-                            <canvas id="chartStatus"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Usage</h3>
-                        <div class="h-64">
-                            <canvas id="chartAccounts"></canvas>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Token Usage</h3>
+                        <div class="h-72">
+                            <canvas id="chartModelTokens"></canvas>
                         </div>
                     </div>
 
@@ -550,6 +543,13 @@
                         <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Usage</h3>
                         <div class="h-64">
                             <canvas id="chartKeys"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Usage</h3>
+                        <div class="h-64">
+                            <canvas id="chartAccounts"></canvas>
                         </div>
                     </div>
 
@@ -566,6 +566,13 @@
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Model Distribution</h3>
                         <div class="h-64 flex justify-center">
                             <canvas id="chartModelDist"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Status Code Distribution</h3>
+                        <div class="h-64 flex justify-center">
+                            <canvas id="chartStatus"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1061,6 +1068,8 @@
                 statusData: [],
                 tokenTrendData: [],
                 modelData: [],
+                keyModelData: [],
+                modelTokenData: [],
                 async init() {
                     this.$watch('$store.router.page', (val) => {
                         if (val === 'stats') this.fetchAll();
@@ -1072,13 +1081,15 @@
                 async fetchAll() {
                     this.loading = true;
                     try {
-                        const [trendRes, accountRes, keyRes, statusRes, tokenTrendRes, modelRes] = await Promise.all([
+                        const [trendRes, accountRes, keyRes, statusRes, tokenTrendRes, modelRes, keyModelRes, modelTokenRes] = await Promise.all([
                             $api(`/admin/stats/timeseries?interval=hour&period=${this.period}`),
                             $api(`/admin/stats?group_by=account&period=${this.period}`),
                             $api(`/admin/stats?group_by=api_key&period=${this.period}`),
                             $api(`/admin/stats?group_by=status_code&period=${this.period}`),
                             $api(`/admin/stats/token-timeseries?interval=hour&period=${this.period}`),
-                            $api(`/admin/stats/models?period=${this.period}`)
+                            $api(`/admin/stats/models?period=${this.period}`),
+                            $api(`/admin/stats/key-model-timeseries?interval=hour&period=${this.period}`),
+                            $api(`/admin/stats/model-token-timeseries?interval=hour&period=${this.period}`)
                         ]);
                         if (trendRes?.ok) this.trendData = await trendRes.json();
                         if (accountRes?.ok) this.accountData = await accountRes.json();
@@ -1086,6 +1097,8 @@
                         if (statusRes?.ok) this.statusData = await statusRes.json();
                         if (tokenTrendRes?.ok) this.tokenTrendData = await tokenTrendRes.json();
                         if (modelRes?.ok) this.modelData = await modelRes.json();
+                        if (keyModelRes?.ok) this.keyModelData = await keyModelRes.json();
+                        if (modelTokenRes?.ok) this.modelTokenData = await modelTokenRes.json();
                     } catch (err) {
                         console.error('Failed to fetch stats', err);
                     } finally {
@@ -1095,6 +1108,9 @@
                     this.renderCharts();
                 },
                 renderCharts() {
+                    const COLORS = ['#6b8fbd', '#7db89e', '#c9a96e', '#c27878', '#9b8cbf', '#c48ba0', '#6bacb5', '#c9926b', '#7bb5a8', '#a98bc9', '#c47882', '#9ab86b'];
+                    const BG_COLORS = ['#b8cce0', '#b5d9c5', '#e3d2a8', '#deb3b3', '#c5bbdb', '#ddb8c8', '#a8d4da', '#e3c3a8', '#b5d9cd', '#ccb8e0', '#deb3b8', '#c8d9a8'];
+
                     if (_charts.trend) _charts.trend.destroy();
                     const trendCtx = document.getElementById('chartTrend');
                     if (trendCtx) {
@@ -1123,57 +1139,44 @@
                         });
                     }
 
-                    if (_charts.accountDist) _charts.accountDist.destroy();
-                    const accountDistCtx = document.getElementById('chartAccountDist');
-                    if (accountDistCtx) {
-                        _charts.accountDist = new Chart(accountDistCtx, {
-                            type: 'doughnut',
-                            data: {
-                                labels: this.accountData.map(d => d.label || 'Unknown'),
-                                datasets: [{
-                                    data: this.accountData.map(d => d.count),
-                                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
-                                }]
-                            },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                    if (_charts.keyModel) _charts.keyModel.destroy();
+                    const keyModelCtx = document.getElementById('chartKeyModel');
+                    if (keyModelCtx) {
+                        const timeLabels = [...new Set(this.keyModelData.map(d => d.time))].sort();
+                        const seriesKeys = [...new Set(this.keyModelData.map(d => `${d.key_name} / ${d.model}`))];
+                        const datasets = seriesKeys.map((sk, i) => {
+                            const colorIdx = i % COLORS.length;
+                            const dataMap = {};
+                            this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk).forEach(d => { dataMap[d.time] = d.count; });
+                            return {
+                                label: sk,
+                                data: timeLabels.map(t => dataMap[t] || 0),
+                                borderColor: COLORS[colorIdx],
+                                backgroundColor: BG_COLORS[colorIdx],
+                                fill: 'origin',
+                                tension: 0.4,
+                                pointRadius: 0
+                            };
                         });
-                    }
-
-                    if (_charts.status) _charts.status.destroy();
-                    const statusCtx = document.getElementById('chartStatus');
-                    if (statusCtx) {
-                        _charts.status = new Chart(statusCtx, {
-                            type: 'doughnut',
+                        _charts.keyModel = new Chart(keyModelCtx, {
+                            type: 'line',
                             data: {
-                                labels: this.statusData.map(d => d.label || 'Unknown'),
-                                datasets: [{
-                                    data: this.statusData.map(d => d.count),
-                                    backgroundColor: this.statusData.map(d => {
-                                        const code = parseInt(d.label);
-                                        if (code >= 500) return '#ef4444';
-                                        if (code >= 400) return '#f59e0b';
-                                        return '#10b981';
-                                    })
-                                }]
+                                labels: timeLabels.map(t => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
+                                datasets
                             },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-                        });
-                    }
-
-                    if (_charts.accounts) _charts.accounts.destroy();
-                    const accountsCtx = document.getElementById('chartAccounts');
-                    if (accountsCtx) {
-                        _charts.accounts = new Chart(accountsCtx, {
-                            type: 'bar',
-                            data: {
-                                labels: this.accountData.map(d => d.label || 'Unknown'),
-                                datasets: [{
-                                    label: 'Requests',
-                                    data: this.accountData.map(d => d.count),
-                                    backgroundColor: '#3b82f6'
-                                }]
-                            },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { display: true, position: 'top' },
+                                    tooltip: {
+                                        filter: (item) => item.raw > 0,
+                                        itemSort: (a, b) => b.raw - a.raw
+                                    }
+                                },
+                                scales: { y: { stacked: true, beginAtZero: true } }
+                            }
                         });
                     }
 
@@ -1188,6 +1191,23 @@
                                     label: 'Requests',
                                     data: this.keyData.map(d => d.count),
                                     backgroundColor: '#8b5cf6'
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                        });
+                    }
+
+                    if (_charts.accounts) _charts.accounts.destroy();
+                    const accountsCtx = document.getElementById('chartAccounts');
+                    if (accountsCtx) {
+                        _charts.accounts = new Chart(accountsCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: this.accountData.map(d => d.label || 'Unknown'),
+                                datasets: [{
+                                    label: 'Requests',
+                                    data: this.accountData.map(d => d.count),
+                                    backgroundColor: '#3b82f6'
                                 }]
                             },
                             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
@@ -1230,6 +1250,47 @@
                         });
                     }
 
+                    if (_charts.modelTokens) _charts.modelTokens.destroy();
+                    const modelTokensCtx = document.getElementById('chartModelTokens');
+                    if (modelTokensCtx) {
+                        const timeLabels = [...new Set(this.modelTokenData.map(d => d.time))].sort();
+                        const models = [...new Set(this.modelTokenData.map(d => d.model))];
+                        const datasets = models.map((m, i) => {
+                            const colorIdx = i % COLORS.length;
+                            const dataMap = {};
+                            this.modelTokenData.filter(d => d.model === m).forEach(d => { dataMap[d.time] = d.input_tokens + d.output_tokens; });
+                            return {
+                                label: m,
+                                data: timeLabels.map(t => dataMap[t] || 0),
+                                borderColor: COLORS[colorIdx],
+                                backgroundColor: BG_COLORS[colorIdx],
+                                fill: 'origin',
+                                tension: 0.4,
+                                pointRadius: 0
+                            };
+                        });
+                        _charts.modelTokens = new Chart(modelTokensCtx, {
+                            type: 'line',
+                            data: {
+                                labels: timeLabels.map(t => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
+                                datasets
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { display: true, position: 'top' },
+                                    tooltip: {
+                                        filter: (item) => item.raw > 0,
+                                        itemSort: (a, b) => b.raw - a.raw
+                                    }
+                                },
+                                scales: { y: { stacked: true, beginAtZero: true } }
+                            }
+                        });
+                    }
+
                     if (_charts.modelDist) _charts.modelDist.destroy();
                     const modelDistCtx = document.getElementById('chartModelDist');
                     if (modelDistCtx) {
@@ -1239,7 +1300,28 @@
                                 labels: this.modelData.map(d => d.model || 'Unknown'),
                                 datasets: [{
                                     data: this.modelData.map(d => d.count),
-                                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
+                                    backgroundColor: COLORS.slice(0, this.modelData.length)
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                        });
+                    }
+
+                    if (_charts.status) _charts.status.destroy();
+                    const statusCtx = document.getElementById('chartStatus');
+                    if (statusCtx) {
+                        _charts.status = new Chart(statusCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: this.statusData.map(d => d.label || 'Unknown'),
+                                datasets: [{
+                                    data: this.statusData.map(d => d.count),
+                                    backgroundColor: this.statusData.map(d => {
+                                        const code = parseInt(d.label);
+                                        if (code >= 500) return '#ef4444';
+                                        if (code >= 400) return '#f59e0b';
+                                        return '#10b981';
+                                    })
                                 }]
                             },
                             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
