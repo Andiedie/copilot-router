@@ -4,7 +4,7 @@ import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatu
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
 import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
-import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel, getCostOverview, getCostTimeSeries, getCostByModel, getCostByKey, getCacheSavings } from '../stats'
+import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel, getCacheRateByKey, getCostOverview, getCostTimeSeries, getCostByModel, getCostByKey, getCacheSavings } from '../stats'
 import { getPoolStatus } from '../account/pool'
 import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams, CacheRateByModelParams, CostModelParams } from '../stats'
 import { syncFromOpenRouter, listPricing, updatePricing, deletePricing, createManualPricing } from '../pricing'
@@ -300,6 +300,19 @@ adminApp.get('/stats/cache-rate-by-model', async (c) => {
     model: query.model,
   }
   const data = await getCacheRateByModel(params)
+  return c.json(data)
+})
+
+adminApp.get('/stats/cache-rate-by-key', async (c) => {
+  const query = c.req.query()
+  const params: CacheRateByModelParams = {
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as CacheRateByModelParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
+  }
+  const data = await getCacheRateByKey(params)
   return c.json(data)
 })
 

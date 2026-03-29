@@ -635,6 +635,51 @@ export async function getCacheRateByModel(params: CacheRateByModelParams): Promi
   }))
 }
 
+export interface CacheRateByKeyRow {
+  key_name: string
+  count: number
+  cached_input_tokens: number
+  input_tokens: number
+  cache_rate: number
+}
+
+export async function getCacheRateByKey(params: CacheRateByModelParams): Promise<CacheRateByKeyRow[]> {
+  const range = resolveTimeRange(params)
+  const where = buildWhereClause(range, params)
+
+  const query = `
+    SELECT
+      COALESCE(k.name, r.api_key_id, 'unknown') as key_name,
+      COUNT(*) as count,
+      SUM(COALESCE(r.cached_input_tokens, 0)) as cached_input_tokens,
+      SUM(COALESCE(r.input_tokens, 0)) as input_tokens,
+      CASE WHEN SUM(COALESCE(r.input_tokens, 0)) = 0 THEN 0.0
+           ELSE ROUND(CAST(SUM(COALESCE(r.cached_input_tokens, 0)) AS REAL) * 100.0 / SUM(COALESCE(r.input_tokens, 0)), 2)
+      END as cache_rate
+    FROM requests r
+    LEFT JOIN api_keys k ON k.id = r.api_key_id
+    ${where}
+    GROUP BY r.api_key_id
+    ORDER BY cache_rate DESC
+  `
+
+  const rows = db.all<{
+    key_name: string
+    count: number
+    cached_input_tokens: number
+    input_tokens: number
+    cache_rate: number
+  }>(sql.raw(query))
+
+  return rows.map(r => ({
+    key_name: String(r.key_name ?? 'unknown'),
+    count: r.count ?? 0,
+    cached_input_tokens: r.cached_input_tokens ?? 0,
+    input_tokens: r.input_tokens ?? 0,
+    cache_rate: r.cache_rate ?? 0,
+  }))
+}
+
 // ─── Cost Analytics ───────────────────────────────────────────────
 
 export interface CostOverviewResult {

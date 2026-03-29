@@ -167,20 +167,19 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <div class="flex justify-between items-start">
-                            <h3 class="text-sm font-medium text-gray-500 mb-1">Today's Requests</h3>
+                            <h3 class="text-sm font-medium text-gray-500 mb-1">Requests Today</h3>
                             <span class="text-xs text-gray-400" x-text="'total: ' + (stats.total_requests?.toLocaleString() || '0')"></span>
                         </div>
                         <p class="text-3xl font-bold text-gray-900" x-text="stats.today_requests?.toLocaleString() || '0'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Cache Hit Rate</h3>
-                        <p class="text-xs text-gray-400 mb-1">Today</p>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Cache Hit Rate Today</h3>
                         <p class="text-3xl font-bold"
                            :class="(stats.today_input_tokens || 0) === 0 ? 'text-gray-400' : ((stats.today_cached_input_tokens || 0) / stats.today_input_tokens * 100) >= 50 ? 'text-green-600' : ((stats.today_cached_input_tokens || 0) / stats.today_input_tokens * 100) >= 20 ? 'text-yellow-600' : 'text-red-600'"
                            x-text="(stats.today_input_tokens || 0) === 0 ? 'N/A' : (((stats.today_cached_input_tokens || 0) / stats.today_input_tokens) * 100).toFixed(1) + '%'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Request Trend</h3>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Request Trend 24H</h3>
                         <div style="height: 60px;">
                             <canvas id="overviewSparkline"></canvas>
                         </div>
@@ -197,8 +196,7 @@
                         <p class="text-3xl font-bold text-purple-600" x-text="formatNumber(stats.today_output_tokens || 0)"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Cached Tokens</h3>
-                        <p class="text-xs text-gray-400 mb-1">Today</p>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Cached Tokens Today</h3>
                         <p class="text-3xl font-bold text-green-600" x-text="formatNumber(stats.today_cached_input_tokens || 0)"></p>
                     </div>
                 </div>
@@ -577,8 +575,8 @@
                     </div>
                 </div>
 
-                <!-- KPI Cards -->
-                <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+                <!-- KPI Cards - Row 1 -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                     <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Requests</p>
                         <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalRequests)"></p>
@@ -595,6 +593,10 @@
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</p>
                         <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalTokens)"></p>
                     </div>
+                </div>
+
+                <!-- KPI Cards - Row 2 -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Cached Input Tokens</p>
                         <p class="text-2xl font-bold text-green-600 mt-1" x-text="formatNumber(kpi.cachedInputTokens)"></p>
@@ -605,17 +607,9 @@
                            :class="kpi.inputTokens === 0 ? 'text-gray-400' : kpi.cacheHitRate >= 50 ? 'text-green-600' : kpi.cacheHitRate >= 20 ? 'text-yellow-600' : 'text-red-600'"
                            x-text="kpi.inputTokens === 0 ? 'N/A' : kpi.cacheHitRate.toFixed(1) + '%'"></p>
                     </div>
-                </div>
-
-                <!-- Cost KPIs -->
-                <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated Total Cost</p>
                         <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCost(kpi.totalCost)"></p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Cost / Request</p>
-                        <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCost(kpi.avgCostPerRequest)"></p>
                     </div>
                     <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Cache Savings</p>
@@ -623,17 +617,17 @@
                     </div>
                 </div>
 
-                <!-- Charts Grid -->
+                <div class="flex items-center gap-3 mb-4 mt-2">
+                    <h2 class="text-base font-semibold text-gray-700 whitespace-nowrap">📊 Request Analytics</h2>
+                    <div class="flex-1 border-t border-gray-200"></div>
+                </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    <!-- Row 1: API Key × Model Requests -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">API Key × Model Requests</h3>
                         <div class="h-80">
                             <canvas id="chartKeyModel"></canvas>
                         </div>
                     </div>
-
-                    <!-- Row 2: Top Models Ranking | Hourly Heatmap -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Top Models Ranking</h3>
                         <div class="h-64">
@@ -649,12 +643,10 @@
                                 <span x-text="hmTip"></span>
                             </div>
                             <div class="flex-1 grid gap-px" style="grid-template-columns: 36px repeat(24, 1fr); grid-template-rows: auto repeat(7, 1fr)">
-                                <!-- Header row: empty corner + 24 hour labels -->
                                 <div></div>
                                 <template x-for="h in 24" :key="'hm-h-'+h">
                                     <div class="flex items-center justify-center text-xs text-gray-400" x-text="h - 1"></div>
                                 </template>
-                                <!-- 7 day rows -->
                                 <template x-for="(day, di) in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="'hm-d-'+di">
                                     <template x-for="ci in 25" :key="'hm-'+di+'-'+ci">
                                         <div x-show="true"
@@ -671,24 +663,25 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Row 3: Request Trend -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Request Trend</h3>
                         <div class="h-72">
                             <canvas id="chartTrend"></canvas>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Row 4: Token Usage Trend -->
+                <div class="flex items-center gap-3 mb-4">
+                    <h2 class="text-base font-semibold text-gray-700 whitespace-nowrap">📈 Token Usage</h2>
+                    <div class="flex-1 border-t border-gray-200"></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Token Usage Trend</h3>
                         <div class="h-72">
                             <canvas id="chartTokenTrend"></canvas>
                         </div>
                     </div>
-
-                    <!-- Row 5: API Key Token Usage | Account Load Distribution -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Token Usage</h3>
                         <div class="h-64">
@@ -701,38 +694,48 @@
                             <canvas id="chartAccountLoad"></canvas>
                         </div>
                     </div>
-
-                    <!-- Row 6: Token Usage by Model -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Token Usage by Model</h3>
                         <div class="h-72">
                             <canvas id="chartModelTokens"></canvas>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Row 7: Cache Token Trend -->
+                <div class="flex items-center gap-3 mb-4">
+                    <h2 class="text-base font-semibold text-gray-700 whitespace-nowrap">🗄️ Cache Analytics</h2>
+                    <div class="flex-1 border-t border-gray-200"></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Cache Token Trend</h3>
                         <div class="h-72">
                             <canvas id="chartCacheTrend"></canvas>
                         </div>
                     </div>
-
-                    <!-- Row 8: Cache Rate by Model -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Cache Rate by Model</h3>
                         <div class="h-64">
                             <canvas id="chartCacheRate"></canvas>
                         </div>
                     </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Cache Rate by API Key</h3>
+                        <div class="h-64">
+                            <canvas id="chartCacheRateByKey"></canvas>
+                        </div>
+                    </div>
+                </div>
 
-                    <!-- Row 9: Cost Trend -->
+                <div class="flex items-center gap-3 mb-4">
+                    <h2 class="text-base font-semibold text-gray-700 whitespace-nowrap">💰 Cost Analytics</h2>
+                    <div class="flex-1 border-t border-gray-200"></div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Estimated Cost Trend</h3>
                         <div class="h-72"><canvas id="chartCostTrend"></canvas></div>
                     </div>
-
-                    <!-- Row 10: Model Cost Ranking | API Key Cost Distribution -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Model Cost Ranking</h3>
                         <div class="h-64"><canvas id="chartModelCost"></canvas></div>
@@ -741,14 +744,10 @@
                         <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Cost Distribution</h3>
                         <div class="h-64"><canvas id="chartKeyCost"></canvas></div>
                     </div>
-
-                    <!-- Row 11: Cost by Model Over Time -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Cost by Model Over Time</h3>
                         <div class="h-72"><canvas id="chartModelCostArea"></canvas></div>
                     </div>
-
-                    <!-- Row 12: Cache Savings Trend -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Estimated Cache Savings</h3>
                         <p class="text-sm text-gray-500 mb-3">Money saved by using cached tokens instead of fresh input tokens</p>
@@ -1034,7 +1033,7 @@
                         const [statsRes, poolRes, sparkRes, costRes] = await Promise.all([
                             $api('/admin/stats/overview'),
                             $api('/admin/pool-status'),
-                            $api('/admin/stats/timeseries?period=today&interval=hour'),
+                            $api(`/admin/stats/timeseries?interval=hour&from=${Math.floor(Date.now()/1000) - 86400}&to=${Math.floor(Date.now()/1000)}`),
                             $api('/admin/stats/cost-overview')
                         ]);
                         
@@ -1449,6 +1448,7 @@
                 keyModelData: [],
                 modelTokenData: [],
                 cacheRateData: [],
+                cacheRateByKeyData: [],
                 costTrendData: [],
                 costByModelData: [],
                 costByKeyData: [],
@@ -1481,7 +1481,7 @@
                     const q = this.buildQuery();
                     const tq = `interval=${this.grouping}&${q}`;
                     try {
-                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes, cacheRateRes, costTrendRes, costByModelRes, costByKeyRes, cacheSavingsRes] = await Promise.all([
+                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes, cacheRateRes, cacheRateByKeyRes, costTrendRes, costByModelRes, costByKeyRes, cacheSavingsRes] = await Promise.all([
                             $api(`/admin/stats/timeseries?${tq}`),
                             $api(`/admin/stats/token-timeseries?${tq}`),
                             $api(`/admin/stats/key-model-timeseries?${tq}`),
@@ -1491,6 +1491,7 @@
                             $api(`/admin/stats/models?${q}`),
                             $api(`/admin/stats/model-token-timeseries?${tq}`),
                             $api(`/admin/stats/cache-rate-by-model?${q}`),
+                            $api(`/admin/stats/cache-rate-by-key?${q}`),
                             $api(`/admin/stats/cost-timeseries?${tq}`),
                             $api(`/admin/stats/cost-by-model?${q}`),
                             $api(`/admin/stats/cost-by-key?${q}`),
@@ -1505,6 +1506,7 @@
                         if (modelStatsRes?.ok) this.modelStatsData = await modelStatsRes.json();
                         if (modelTokenRes?.ok) this.modelTokenData = await modelTokenRes.json();
                         if (cacheRateRes?.ok) this.cacheRateData = await cacheRateRes.json();
+                        if (cacheRateByKeyRes?.ok) this.cacheRateByKeyData = await cacheRateByKeyRes.json();
                         if (costTrendRes?.ok) this.costTrendData = await costTrendRes.json();
                         if (costByModelRes?.ok) this.costByModelData = await costByModelRes.json();
                         if (costByKeyRes?.ok) this.costByKeyData = await costByKeyRes.json();
@@ -1525,7 +1527,6 @@
                     const cachedInputTokens = this.tokenTrendData.reduce((s, d) => s + (d.cached_input_tokens || 0), 0);
                     const cacheHitRate = inputTokens === 0 ? 0 : (cachedInputTokens / inputTokens) * 100;
                     const totalCost = this.costByModelData.reduce((s, d) => s + Number(d.total_cost || 0), 0);
-                    const avgCostPerRequest = totalRequests === 0 ? 0 : totalCost / totalRequests;
                     const cacheSavings = this.cacheSavingsData.reduce((s, d) => s + Number(d.savings || 0), 0);
                     this.kpi = {
                         totalRequests,
@@ -1535,7 +1536,6 @@
                         cachedInputTokens,
                         cacheHitRate,
                         totalCost,
-                        avgCostPerRequest,
                         cacheSavings
                     };
                 },
@@ -1850,6 +1850,33 @@
                                     label: 'Cache Rate (%)',
                                     data: sorted.map(d => d.cache_rate),
                                     backgroundColor: '#10b981'
+                                }]
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { beginAtZero: true, max: 100 },
+                                    y: {}
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.cacheRateByKey) _charts.cacheRateByKey.destroy();
+                    const cacheRateByKeyCtx = document.getElementById('chartCacheRateByKey');
+                    if (cacheRateByKeyCtx) {
+                        const sorted = [...this.cacheRateByKeyData].sort((a, b) => b.cache_rate - a.cache_rate);
+                        _charts.cacheRateByKey = new Chart(cacheRateByKeyCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: sorted.map(d => d.key_name),
+                                datasets: [{
+                                    label: 'Cache Rate (%)',
+                                    data: sorted.map(d => d.cache_rate),
+                                    backgroundColor: '#6366f1'
                                 }]
                             },
                             options: {
