@@ -1,0 +1,10 @@
+matchModelName(no match): null
+matchModelName(exact): "openai/gpt-4o"
+matchModelName(suffix): "openai/gpt-4o"
+matchModelName(shortest suffix): "openai/gpt-4o"
+createManualPricing: {"success":true}
+updatePricing: {"success":true}
+deletePricing: {"success":true}
+updatePricing(not found): {"success":false,"error":"Not found"}
+createManualPricing(duplicate): {"success":false,"error":"Failed to run the query '\n      INSERT INTO model_pricing (i"}
+listPricing count: 8 unmatched: 5

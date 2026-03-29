@@ -634,3 +634,210 @@ export async function getCacheRateByModel(params: CacheRateByModelParams): Promi
     cache_rate: r.cache_rate ?? 0,
   }))
 }
+
+// ─── Cost Analytics ───────────────────────────────────────────────
+
+export interface CostOverviewResult {
+  today_cost: number
+  week_cost: number
+  month_cost: number
+  unpriced_model_count: number
+}
+
+export async function getCostOverview(): Promise<CostOverviewResult> {
+  const now = Math.floor(Date.now() / 1000)
+  const todayStart = startOfToday()
+  const weekStart = now - 7 * 86400
+  const monthStart = now - 30 * 86400
+
+  const query = `
+    SELECT
+      SUM(CASE WHEN r.created_at >= ${todayStart}
+          THEN COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+             + COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)
+          ELSE 0 END) as today_cost,
+      SUM(CASE WHEN r.created_at >= ${weekStart}
+          THEN COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+             + COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)
+          ELSE 0 END) as week_cost,
+      SUM(CASE WHEN r.created_at >= ${monthStart}
+          THEN COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+             + COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)
+          ELSE 0 END) as month_cost
+    FROM requests r
+    LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+  `
+
+  const [row] = db.all<{ today_cost: number; week_cost: number; month_cost: number }>(sql.raw(query))
+
+  const unpricedQuery = `
+    SELECT COUNT(DISTINCT r.model) as cnt
+    FROM requests r
+    LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+    WHERE mp.id IS NULL AND r.model IS NOT NULL
+  `
+  const [unpricedRow] = db.all<{ cnt: number }>(sql.raw(unpricedQuery))
+
+  return {
+    today_cost: row?.today_cost ?? 0,
+    week_cost: row?.week_cost ?? 0,
+    month_cost: row?.month_cost ?? 0,
+    unpriced_model_count: unpricedRow?.cnt ?? 0,
+  }
+}
+
+export interface CostTimeSeriesRow {
+  time: string
+  input_cost: number
+  output_cost: number
+  total_cost: number
+}
+
+export async function getCostTimeSeries(params: TimeSeriesParams): Promise<CostTimeSeriesRow[]> {
+  const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
+  const where = buildWhereClause(range, params)
+  const fmt = intervalFmt(params.interval)
+
+  const query = `
+    SELECT
+      ${fmt} as time,
+      SUM(COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)) as input_cost,
+      SUM(COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)) as output_cost,
+      SUM(
+        COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+        + COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)
+      ) as total_cost
+    FROM requests r
+    LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+    ${where}
+    GROUP BY time
+    ORDER BY time ASC
+  `
+
+  const rows = db.all<{ time: string; input_cost: number; output_cost: number; total_cost: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    time: r.time,
+    input_cost: r.input_cost ?? 0,
+    output_cost: r.output_cost ?? 0,
+    total_cost: r.total_cost ?? 0,
+  }))
+}
+
+export interface CostModelRow {
+  model: string
+  input_cost: number
+  output_cost: number
+  total_cost: number
+  request_count: number
+}
+
+export interface CostModelParams {
+  from?: number
+  to?: number
+  period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
+  api_key_id?: string
+  model?: string
+}
+
+export async function getCostByModel(params: CostModelParams): Promise<CostModelRow[]> {
+  const range = resolveTimeRange(params)
+  const where = buildWhereClause(range, params)
+
+  const query = `
+    SELECT
+      COALESCE(r.model, 'unknown') as model,
+      SUM(COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)) as input_cost,
+      SUM(COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)) as output_cost,
+      SUM(
+        COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+        + COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)
+      ) as total_cost,
+      COUNT(*) as request_count
+    FROM requests r
+    LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+    ${where}
+    GROUP BY r.model
+    ORDER BY total_cost DESC
+  `
+
+  const rows = db.all<{
+    model: string
+    input_cost: number
+    output_cost: number
+    total_cost: number
+    request_count: number
+  }>(sql.raw(query))
+
+  return rows.map(r => ({
+    model: String(r.model ?? 'unknown'),
+    input_cost: r.input_cost ?? 0,
+    output_cost: r.output_cost ?? 0,
+    total_cost: r.total_cost ?? 0,
+    request_count: r.request_count ?? 0,
+  }))
+}
+
+export interface CostByKeyRow {
+  key_name: string
+  total_cost: number
+}
+
+export async function getCostByKey(params: KeyTokenStatsParams): Promise<CostByKeyRow[]> {
+  const range = resolveTimeRange(params)
+  const where = buildWhereClause(range, params)
+
+  const query = `
+    SELECT
+      COALESCE(k.name, r.api_key_id, 'unknown') as key_name,
+      SUM(
+        COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+        + COALESCE(COALESCE(r.output_tokens,0) * CAST(NULLIF(mp.completion_price,'') AS REAL), 0)
+      ) as total_cost
+    FROM requests r
+    LEFT JOIN api_keys k ON k.id = r.api_key_id
+    LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+    ${where}
+    GROUP BY r.api_key_id
+    ORDER BY total_cost DESC
+  `
+
+  const rows = db.all<{ key_name: string; total_cost: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    key_name: String(r.key_name ?? 'unknown'),
+    total_cost: r.total_cost ?? 0,
+  }))
+}
+
+export interface CacheSavingsRow {
+  time: string
+  savings: number
+  cached_tokens: number
+}
+
+export async function getCacheSavings(params: TimeSeriesParams): Promise<CacheSavingsRow[]> {
+  const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
+  const where = buildWhereClause(range, params)
+  const fmt = intervalFmt(params.interval)
+
+  const query = `
+    SELECT
+      ${fmt} as time,
+      SUM(COALESCE(COALESCE(r.cached_input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)) as savings,
+      SUM(COALESCE(r.cached_input_tokens, 0)) as cached_tokens
+    FROM requests r
+    LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+    ${where}
+    GROUP BY time
+    ORDER BY time ASC
+  `
+
+  const rows = db.all<{ time: string; savings: number; cached_tokens: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    time: r.time,
+    savings: r.savings ?? 0,
+    cached_tokens: r.cached_tokens ?? 0,
+  }))
+}

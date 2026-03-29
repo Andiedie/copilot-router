@@ -1,0 +1,27 @@
+Task 3: Unpriced Models Handling — Evidence
+============================================
+
+Date: 2026-03-29
+
+Strategy: LEFT JOIN ensures unpriced models are NOT excluded from results.
+
+getCostOverview():
+- Separate query counts distinct models with no matching model_pricing entry:
+  SELECT COUNT(DISTINCT r.model) FROM requests r
+  LEFT JOIN model_pricing mp ON r.model = mp.copilot_model_name
+  WHERE mp.id IS NULL AND r.model IS NOT NULL
+- Returns as `unpriced_model_count` field
+
+getCostByModel():
+- LEFT JOIN means unpriced models appear with $0 cost
+- COALESCE(COALESCE(r.input_tokens,0) * CAST(NULLIF(mp.prompt_price,'') AS REAL), 0)
+  → When mp.prompt_price IS NULL (unpriced), NULLIF returns NULL, CAST returns NULL,
+    multiply returns NULL, outer COALESCE returns 0
+- Models without pricing show total_cost=0, request_count>0
+
+getCostByKey(), getCostTimeSeries(), getCacheSavings():
+- Same LEFT JOIN + COALESCE pattern
+- Unpriced model requests contribute $0 to aggregations
+
+Verification: TypeScript compiles, no runtime errors (server starts clean).
+Full endpoint testing deferred to Task 5 (API endpoints not yet created).
