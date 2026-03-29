@@ -593,7 +593,12 @@
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Hourly Heatmap</h3>
-                        <div class="h-64 flex flex-col">
+                        <div class="h-64 flex flex-col relative" x-data="{ hmTip: '', hmShow: false, hmX: 0, hmY: 0 }">
+                            <div x-show="hmShow" x-cloak
+                                 class="absolute z-10 px-2 py-1 text-xs text-white bg-gray-800 rounded shadow pointer-events-none whitespace-nowrap"
+                                 :style="'left:' + hmX + 'px;top:' + hmY + 'px;transform:translate(-50%,-120%)'">
+                                <span x-text="hmTip"></span>
+                            </div>
                             <div class="flex-1 grid gap-px" style="grid-template-columns: 36px repeat(24, 1fr); grid-template-rows: auto repeat(7, 1fr)">
                                 <!-- Header row: empty corner + 24 hour labels -->
                                 <div></div>
@@ -605,9 +610,11 @@
                                     <template x-for="ci in 25" :key="'hm-'+di+'-'+ci">
                                         <div x-show="true"
                                              class="flex items-center justify-center"
-                                             :class="ci === 1 ? 'text-xs text-gray-500 font-medium pr-1 justify-end' : 'rounded-sm'"
+                                             :class="ci === 1 ? 'text-xs text-gray-500 font-medium pr-1 justify-end' : 'rounded-sm cursor-pointer'"
                                              :style="ci > 1 ? 'background-color:' + heatmapColor(getHeatmapCell(di, ci - 2)) : ''"
-                                             :title="ci > 1 ? getHeatmapCell(di, ci - 2) + ' requests (' + day + ' ' + (ci-2) + ':00)' : ''"
+                                             @mouseenter="if (ci > 1) { hmTip = getHeatmapCell(di, ci - 2) + ' requests (' + day + ' ' + (ci-2) + ':00)'; hmShow = true; }"
+                                             @mousemove="hmX = $event.offsetX + $el.offsetLeft; hmY = $el.offsetTop"
+                                             @mouseleave="hmShow = false"
                                              x-text="ci === 1 ? day : ''">
                                         </div>
                                     </template>
@@ -1514,7 +1521,18 @@
                                 indexAxis: 'y',
                                 responsive: true,
                                 maintainAspectRatio: false,
-                                plugins: { legend: { display: true, position: 'top' } },
+                                interaction: { mode: 'y', intersect: false },
+                                plugins: {
+                                    legend: { display: true, position: 'top' },
+                                    tooltip: {
+                                        callbacks: {
+                                            afterBody: (items) => {
+                                                const total = items.reduce((s, i) => s + i.raw, 0);
+                                                return 'Total: ' + total.toLocaleString();
+                                            }
+                                        }
+                                    }
+                                },
                                 scales: {
                                     x: { stacked: true, beginAtZero: true },
                                     y: { stacked: true }
