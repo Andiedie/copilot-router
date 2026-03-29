@@ -1,0 +1,14 @@
+Task 5 QA evidence
+
+TypeScript check:
+- `bunx tsc --noEmit`
+- Result: failed due unrelated workspace errors in `opencode/` files; no diagnostics in `src/admin/routes.ts`
+
+Dev/API checks:
+- `GET /admin/stats/overview` -> `true` for `today_cached_input_tokens`
+- `GET /admin/stats/token-timeseries?period=last30d&interval=day` -> `true` for `cached_input_tokens`
+- `GET /admin/stats/cache-rate-by-model?period=last30d` -> `"array"`
+- `GET /admin/stats/cache-rate-by-model?period=last30d` keys -> `["cache_rate","cached_input_tokens","count","input_tokens","model"]`
+
+Server note:
+- Port 4141 already had a Bun listener when checked (`lsof` showed existing `bun` process on TCP *:4141)`

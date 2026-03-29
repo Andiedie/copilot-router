@@ -4,9 +4,9 @@ import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatu
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
 import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
-import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap } from '../stats'
+import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel } from '../stats'
 import { getPoolStatus } from '../account/pool'
-import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams } from '../stats'
+import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams, CacheRateByModelParams } from '../stats'
 
 const adminApp = new Hono()
 
@@ -286,6 +286,19 @@ adminApp.get('/stats/heatmap', async (c) => {
     model: query.model,
   }
   const data = await getHourlyHeatmap(params)
+  return c.json(data)
+})
+
+adminApp.get('/stats/cache-rate-by-model', async (c) => {
+  const query = c.req.query()
+  const params: CacheRateByModelParams = {
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as CacheRateByModelParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
+  }
+  const data = await getCacheRateByModel(params)
   return c.json(data)
 })
 
