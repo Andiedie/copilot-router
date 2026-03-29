@@ -1804,9 +1804,9 @@
                     try {
                         const res = await $api('/admin/pricing');
                         if (res?.ok) {
-                            const data = await res.json();
-                            this.pricing = data.rows || [];
-                            this.unmatchedModels = data.unmatched_models || [];
+                    const data = await res.json();
+                    this.pricing = data.pricing || [];
+                    this.unmatchedModels = data.unmatched_models || [];
                         }
                     } catch(e) { console.error(e); }
                     finally { this.loading = false; }
