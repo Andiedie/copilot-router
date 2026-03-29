@@ -73,15 +73,15 @@ export interface RequestLogResult {
 
 type Period = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
 
-function startOfTodayUTC(): number {
+function startOfToday(): number {
   const now = new Date()
-  const utcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  return Math.floor(utcMidnight / 1000)
+  const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.floor(localMidnight.getTime() / 1000)
 }
 
 function periodToRange(period: Period): { from: number; to: number } {
   const now = Math.floor(Date.now() / 1000)
-  const todayStart = startOfTodayUTC()
+  const todayStart = startOfToday()
   const DAY = 86400
 
   switch (period) {
@@ -125,7 +125,7 @@ function escSql(v: string): string {
 }
 
 export async function getOverview(): Promise<OverviewResult> {
-  const todayStart = startOfTodayUTC()
+  const todayStart = startOfToday()
 
   const [reqStats] = db.all<{
     total_requests: number
@@ -207,12 +207,12 @@ export async function getStats(params: StatsParams): Promise<StatsRow[]> {
       groupExpr = 'r.account_id'
       break
     case 'hour':
-      selectExpr = `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch') as label`
-      groupExpr = `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
+      selectExpr = `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime') as label`
+      groupExpr = `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
       break
     case 'day':
-      selectExpr = `strftime('%Y-%m-%d', r.created_at, 'unixepoch') as label`
-      groupExpr = `strftime('%Y-%m-%d', r.created_at, 'unixepoch')`
+      selectExpr = `strftime('%Y-%m-%d', r.created_at, 'unixepoch', 'localtime') as label`
+      groupExpr = `strftime('%Y-%m-%d', r.created_at, 'unixepoch', 'localtime')`
       break
     case 'status_code':
       selectExpr = `CAST(COALESCE(r.status_code, 0) AS TEXT) as label`
@@ -248,8 +248,8 @@ export async function getTimeSeries(params: TimeSeriesParams): Promise<TimeSerie
   const where = buildWhereClause(range, params)
 
   const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
-    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
+    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
 
   const query = `
     SELECT
@@ -280,8 +280,8 @@ export async function getTokenTimeSeries(params: TimeSeriesParams): Promise<Toke
   const where = buildWhereClause(range, params)
 
   const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
-    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
+    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
 
   const query = `
     SELECT
@@ -368,8 +368,8 @@ export async function getKeyModelTimeSeries(params: TimeSeriesParams): Promise<K
   const where = buildWhereClause(range, params)
 
   const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
-    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
+    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
 
   const query = `
     SELECT
@@ -406,8 +406,8 @@ export async function getModelTokenTimeSeries(params: TimeSeriesParams): Promise
   const where = buildWhereClause(range, params)
 
   const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00Z', r.created_at, 'unixepoch')`
-    : `strftime('%Y-%m-%dT00:00:00Z', r.created_at, 'unixepoch')`
+    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
+    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
 
   const query = `
     SELECT

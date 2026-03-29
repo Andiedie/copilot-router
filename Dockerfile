@@ -10,6 +10,7 @@ RUN bun install --frozen-lockfile --production && \
   node_modules/.cache
 
 FROM oven/bun:1-alpine AS release
+RUN apk add --no-cache tzdata
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

@@ -8,4 +8,5 @@ services:
     environment:
       - ADMIN_TOKEN=${ADMIN_TOKEN}
       - DB_PATH=/app/data/copilot-router.db
+      - TZ=${TZ:-UTC}
     restart: unless-stopped
