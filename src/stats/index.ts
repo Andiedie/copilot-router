@@ -12,6 +12,7 @@ export interface OverviewResult {
   today_input_tokens: number
   today_output_tokens: number
   today_total_tokens: number
+  today_cached_input_tokens: number
   avg_duration_ms: number
   success_rate: number
   today_models: number
@@ -148,6 +149,7 @@ export async function getOverview(): Promise<OverviewResult> {
     error_requests: number
     today_input_tokens: number
     today_output_tokens: number
+    today_cached_input_tokens: number
     avg_duration_ms: number
     success_rate: number
     today_models: number
@@ -158,6 +160,7 @@ export async function getOverview(): Promise<OverviewResult> {
       SUM(CASE WHEN status_code >= 400 AND created_at >= ${todayStart} THEN 1 ELSE 0 END) as error_requests,
       SUM(CASE WHEN created_at >= ${todayStart} THEN COALESCE(input_tokens, 0) ELSE 0 END) as today_input_tokens,
       SUM(CASE WHEN created_at >= ${todayStart} THEN COALESCE(output_tokens, 0) ELSE 0 END) as today_output_tokens,
+      SUM(CASE WHEN created_at >= ${todayStart} THEN COALESCE(cached_input_tokens, 0) ELSE 0 END) as today_cached_input_tokens,
       ROUND(AVG(CASE WHEN created_at >= ${todayStart} AND duration_ms IS NOT NULL THEN duration_ms ELSE NULL END), 2) as avg_duration_ms,
       CASE WHEN SUM(CASE WHEN created_at >= ${todayStart} THEN 1 ELSE 0 END) = 0 THEN 100.0
            ELSE ROUND(SUM(CASE WHEN created_at >= ${todayStart} AND (status_code IS NULL OR status_code < 400) THEN 1.0 ELSE 0.0 END) * 100.0 / SUM(CASE WHEN created_at >= ${todayStart} THEN 1 ELSE 0 END), 2)
@@ -196,6 +199,7 @@ export async function getOverview(): Promise<OverviewResult> {
     today_input_tokens: reqStats?.today_input_tokens ?? 0,
     today_output_tokens: reqStats?.today_output_tokens ?? 0,
     today_total_tokens: (reqStats?.today_input_tokens ?? 0) + (reqStats?.today_output_tokens ?? 0),
+    today_cached_input_tokens: reqStats?.today_cached_input_tokens ?? 0,
     avg_duration_ms: reqStats?.avg_duration_ms ?? 0,
     success_rate: reqStats?.success_rate ?? 100,
     today_models: reqStats?.today_models ?? 0,
@@ -286,6 +290,7 @@ export interface TokenTimeSeriesRow {
   time: string
   input_tokens: number
   output_tokens: number
+  cached_input_tokens: number
 }
 
 export async function getTokenTimeSeries(params: TimeSeriesParams): Promise<TokenTimeSeriesRow[]> {
@@ -298,19 +303,21 @@ export async function getTokenTimeSeries(params: TimeSeriesParams): Promise<Toke
     SELECT
       ${fmt} as time,
       SUM(COALESCE(input_tokens, 0)) as input_tokens,
-      SUM(COALESCE(output_tokens, 0)) as output_tokens
+      SUM(COALESCE(output_tokens, 0)) as output_tokens,
+      SUM(COALESCE(cached_input_tokens, 0)) as cached_input_tokens
     FROM requests r
     ${where}
     GROUP BY time
     ORDER BY time ASC
   `
 
-  const rows = db.all<{ time: string; input_tokens: number; output_tokens: number }>(sql.raw(query))
+  const rows = db.all<{ time: string; input_tokens: number; output_tokens: number; cached_input_tokens: number }>(sql.raw(query))
 
   return rows.map(r => ({
     time: r.time,
     input_tokens: r.input_tokens ?? 0,
     output_tokens: r.output_tokens ?? 0,
+    cached_input_tokens: r.cached_input_tokens ?? 0,
   }))
 }
 
@@ -319,6 +326,7 @@ export interface ModelStatsRow {
   count: number
   input_tokens: number
   output_tokens: number
+  cached_input_tokens: number
   avg_duration_ms: number
 }
 
@@ -340,6 +348,7 @@ export async function getModelStats(params: ModelStatsParams): Promise<ModelStat
       COUNT(*) as count,
       SUM(COALESCE(r.input_tokens, 0)) as input_tokens,
       SUM(COALESCE(r.output_tokens, 0)) as output_tokens,
+      SUM(COALESCE(r.cached_input_tokens, 0)) as cached_input_tokens,
       ROUND(AVG(CASE WHEN r.duration_ms IS NOT NULL THEN r.duration_ms ELSE NULL END), 2) as avg_duration_ms
     FROM requests r
     ${where}
@@ -352,6 +361,7 @@ export async function getModelStats(params: ModelStatsParams): Promise<ModelStat
     count: number
     input_tokens: number
     output_tokens: number
+    cached_input_tokens: number
     avg_duration_ms: number
   }>(sql.raw(query))
 
@@ -360,6 +370,7 @@ export async function getModelStats(params: ModelStatsParams): Promise<ModelStat
     count: r.count ?? 0,
     input_tokens: r.input_tokens ?? 0,
     output_tokens: r.output_tokens ?? 0,
+    cached_input_tokens: r.cached_input_tokens ?? 0,
     avg_duration_ms: r.avg_duration_ms ?? 0,
   }))
 }
@@ -405,6 +416,7 @@ export interface ModelTokenTimeSeriesRow {
   model: string
   input_tokens: number
   output_tokens: number
+  cached_input_tokens: number
 }
 
 export async function getModelTokenTimeSeries(params: TimeSeriesParams): Promise<ModelTokenTimeSeriesRow[]> {
@@ -418,20 +430,22 @@ export async function getModelTokenTimeSeries(params: TimeSeriesParams): Promise
       ${fmt} as time,
       COALESCE(r.model, 'unknown') as model,
       SUM(COALESCE(input_tokens, 0)) as input_tokens,
-      SUM(COALESCE(output_tokens, 0)) as output_tokens
+      SUM(COALESCE(output_tokens, 0)) as output_tokens,
+      SUM(COALESCE(cached_input_tokens, 0)) as cached_input_tokens
     FROM requests r
     ${where}
     GROUP BY time, r.model
     ORDER BY time ASC
   `
 
-  const rows = db.all<{ time: string; model: string; input_tokens: number; output_tokens: number }>(sql.raw(query))
+  const rows = db.all<{ time: string; model: string; input_tokens: number; output_tokens: number; cached_input_tokens: number }>(sql.raw(query))
 
   return rows.map(r => ({
     time: r.time,
     model: String(r.model ?? 'unknown'),
     input_tokens: r.input_tokens ?? 0,
     output_tokens: r.output_tokens ?? 0,
+    cached_input_tokens: r.cached_input_tokens ?? 0,
   }))
 }
 
@@ -487,6 +501,7 @@ export interface KeyTokenStatsRow {
   key_name: string
   input_tokens: number
   output_tokens: number
+  cached_input_tokens: number
 }
 
 export interface KeyTokenStatsParams {
@@ -505,7 +520,8 @@ export async function getKeyTokenStats(params: KeyTokenStatsParams): Promise<Key
     SELECT
       COALESCE(k.name, r.api_key_id, 'unknown') as key_name,
       SUM(COALESCE(r.input_tokens, 0)) as input_tokens,
-      SUM(COALESCE(r.output_tokens, 0)) as output_tokens
+      SUM(COALESCE(r.output_tokens, 0)) as output_tokens,
+      SUM(COALESCE(r.cached_input_tokens, 0)) as cached_input_tokens
     FROM requests r
     LEFT JOIN api_keys k ON k.id = r.api_key_id
     ${where}
@@ -513,12 +529,13 @@ export async function getKeyTokenStats(params: KeyTokenStatsParams): Promise<Key
     ORDER BY (input_tokens + output_tokens) DESC
   `
 
-  const rows = db.all<{ key_name: string; input_tokens: number; output_tokens: number }>(sql.raw(query))
+  const rows = db.all<{ key_name: string; input_tokens: number; output_tokens: number; cached_input_tokens: number }>(sql.raw(query))
 
   return rows.map(r => ({
     key_name: String(r.key_name ?? 'unknown'),
     input_tokens: r.input_tokens ?? 0,
     output_tokens: r.output_tokens ?? 0,
+    cached_input_tokens: r.cached_input_tokens ?? 0,
   }))
 }
 
@@ -564,4 +581,56 @@ export async function getDistinctModels(): Promise<string[]> {
   const query = `SELECT DISTINCT model FROM requests WHERE model IS NOT NULL ORDER BY model ASC`
   const rows = db.all<{ model: string }>(sql.raw(query))
   return rows.map(r => r.model)
+}
+
+export interface CacheRateByModelRow {
+  model: string
+  count: number
+  cached_input_tokens: number
+  input_tokens: number
+  cache_rate: number
+}
+
+export interface CacheRateByModelParams {
+  from?: number
+  to?: number
+  period?: Period
+  api_key_id?: string
+  model?: string
+}
+
+export async function getCacheRateByModel(params: CacheRateByModelParams): Promise<CacheRateByModelRow[]> {
+  const range = resolveTimeRange(params)
+  const where = buildWhereClause(range, params)
+
+  const query = `
+    SELECT
+      COALESCE(r.model, 'unknown') as model,
+      COUNT(*) as count,
+      SUM(COALESCE(r.cached_input_tokens, 0)) as cached_input_tokens,
+      SUM(COALESCE(r.input_tokens, 0)) as input_tokens,
+      CASE WHEN SUM(COALESCE(r.input_tokens, 0)) = 0 THEN 0.0
+           ELSE ROUND(CAST(SUM(COALESCE(r.cached_input_tokens, 0)) AS REAL) * 100.0 / SUM(COALESCE(r.input_tokens, 0)), 2)
+      END as cache_rate
+    FROM requests r
+    ${where}
+    GROUP BY r.model
+    ORDER BY cache_rate DESC
+  `
+
+  const rows = db.all<{
+    model: string
+    count: number
+    cached_input_tokens: number
+    input_tokens: number
+    cache_rate: number
+  }>(sql.raw(query))
+
+  return rows.map(r => ({
+    model: String(r.model ?? 'unknown'),
+    count: r.count ?? 0,
+    cached_input_tokens: r.cached_input_tokens ?? 0,
+    input_tokens: r.input_tokens ?? 0,
+    cache_rate: r.cache_rate ?? 0,
+  }))
 }
