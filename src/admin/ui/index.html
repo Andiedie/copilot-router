@@ -2127,6 +2127,7 @@
                         } else {
                             const body = { copilot_model_name: this.form.copilot_model_name, prompt_price: this.form.prompt_price, completion_price: this.form.completion_price };
                             if (this.form.cache_read_price) body.cache_read_price = this.form.cache_read_price;
+                            if (this.form.openrouter_model_id) body.openrouter_model_id = this.form.openrouter_model_id;
                             res = await $api('/admin/pricing', { method: 'POST', body: JSON.stringify(body) });
                         }
                         if (res?.ok) {

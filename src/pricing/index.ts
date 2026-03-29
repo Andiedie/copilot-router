@@ -215,8 +215,20 @@ export async function updatePricing(
       setClauses.push(`completion_price = '${escSql(data.completion_price)}'`)
     if (data.cache_read_price !== undefined)
       setClauses.push(`cache_read_price = '${escSql(data.cache_read_price)}'`)
-    if (data.source !== undefined)
+    if (data.source !== undefined) {
       setClauses.push(`source = '${escSql(data.source)}'`)
+    } else {
+      const priceChanged =
+        data.prompt_price !== undefined ||
+        data.completion_price !== undefined ||
+        data.cache_read_price !== undefined
+      const mappingChanged = data.openrouter_model_id !== undefined
+      if (priceChanged) {
+        setClauses.push(`source = 'manual'`)
+      } else if (mappingChanged) {
+        setClauses.push(`source = 'openrouter_manual'`)
+      }
+    }
 
     if (setClauses.length === 0) {
       return { success: false, error: "No fields to update" }
@@ -263,6 +275,7 @@ export async function createManualPricing(
   promptPrice: string,
   completionPrice: string,
   cacheReadPrice?: string,
+  openrouterModelId?: string,
 ): Promise<
   | { success: true; created: ModelPricingRow }
   | { success: false; error: string }
@@ -276,12 +289,12 @@ export async function createManualPricing(
       VALUES (
         '${escSql(id)}',
         '${escSql(copilotModelName)}',
-        NULL,
+        ${openrouterModelId ? `'${escSql(openrouterModelId)}'` : 'NULL'},
         NULL,
         '${escSql(promptPrice)}',
         '${escSql(completionPrice)}',
         ${cacheReadPrice ? `'${escSql(cacheReadPrice)}'` : "NULL"},
-        'manual',
+        ${openrouterModelId ? `'openrouter_manual'` : `'manual'`},
         NULL,
         ${ts},
         ${ts}

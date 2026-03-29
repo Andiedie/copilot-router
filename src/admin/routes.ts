@@ -353,6 +353,7 @@ adminApp.post('/pricing', async (c) => {
     prompt_price: string
     completion_price: string
     cache_read_price?: string
+    openrouter_model_id?: string
   }>()
   if (!body.copilot_model_name || !body.prompt_price || !body.completion_price) {
     return c.json({ error: 'copilot_model_name, prompt_price, completion_price are required' }, 400)
@@ -362,6 +363,7 @@ adminApp.post('/pricing', async (c) => {
     body.prompt_price,
     body.completion_price,
     body.cache_read_price,
+    body.openrouter_model_id,
   )
   if (!result.success) {
     return c.json({ error: result.error }, 500)
