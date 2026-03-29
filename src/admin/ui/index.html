@@ -152,14 +152,15 @@
             <!-- Overview Page -->
             <div x-show="$store.router.page === 'overview'" x-data="overviewPage()" x-init="init()">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl font-bold text-gray-900">Overview</h1>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-900">Overview</h1>
+                        <svg x-show="loading" class="w-5 h-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    </div>
                     <button @click="fetchData()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                         Refresh
                     </button>
                 </div>
-
-                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading data...</div>
 
                 <!-- Metric Cards - Row 1: Core Metrics -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
@@ -252,7 +253,10 @@
             <!-- Placeholder Pages -->
             <div x-show="$store.router.page === 'accounts'" x-data="accountsPage()" x-init="init()">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl font-bold text-gray-900">Accounts</h1>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-900">Accounts</h1>
+                        <svg x-show="loading" class="w-5 h-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    </div>
                     <div class="flex gap-2">
                         <button @click="syncAll()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded hover:bg-gray-200 transition-colors text-sm font-medium flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -264,8 +268,6 @@
                         </button>
                     </div>
                 </div>
-
-                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading accounts...</div>
 
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                     <table class="min-w-full divide-y divide-gray-200">
@@ -380,7 +382,10 @@
 
             <div x-show="$store.router.page === 'keys'" x-data="keysPage()" x-init="init()">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl font-bold text-gray-900">API Keys</h1>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-900">API Keys</h1>
+                        <svg x-show="loading" class="w-5 h-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    </div>
                     <form @submit.prevent="createKey" class="flex gap-2">
                         <input type="text" x-model="newKeyName" placeholder="New key name..." class="px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                         <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2">
@@ -389,8 +394,6 @@
                         </button>
                     </form>
                 </div>
-
-                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading keys...</div>
 
                 <!-- New Key Alert -->
                 <div x-show="createdKey" class="mb-6 bg-green-50 border border-green-200 rounded-lg p-4" x-cloak>
@@ -507,7 +510,10 @@
             <div x-show="$store.router.page === 'stats'" x-data="statsPage()" x-init="init()">
                 <!-- Filter Bar -->
                 <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
-                    <h1 class="text-2xl font-bold text-gray-900">Statistics</h1>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-900">Statistics</h1>
+                        <svg x-show="loading" class="w-5 h-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    </div>
                     <div class="flex flex-wrap gap-3 items-center">
                         <!-- Model filter -->
                         <select x-model="filterModel" @change="fetchAll()"
@@ -567,8 +573,6 @@
                         <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalTokens)"></p>
                     </div>
                 </div>
-
-                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading statistics...</div>
 
                 <!-- Charts Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -654,7 +658,10 @@
 
             <div x-show="$store.router.page === 'requests'" x-data="requestLogPage()" x-init="init()">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl font-bold text-gray-900">Request Log</h1>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-2xl font-bold text-gray-900">Request Log</h1>
+                        <svg x-show="loading" class="w-5 h-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                    </div>
                     <button @click="fetchLog()" class="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                         Refresh
@@ -682,7 +689,7 @@
                     </div>
                 </div>
 
-                <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading requests...</div>
+
 
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-4">
                     <div class="overflow-x-auto">
