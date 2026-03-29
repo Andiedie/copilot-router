@@ -1059,14 +1059,23 @@
                 renderSparkline() {
                     const ctx = document.getElementById('overviewSparkline');
                     if (!ctx) return;
-                    const hourMap = {};
-                    for (let h = 0; h < 24; h++) hourMap[h] = 0;
-                    for (const d of this.sparklineData) {
-                        const hour = new Date(d.time).getHours();
-                        hourMap[hour] = (hourMap[hour] || 0) + d.count;
+                    const now = new Date();
+                    const currentHour = now.getHours();
+                    const labels = [];
+                    const data = [];
+                    const buckets = new Map();
+                    for (let i = 23; i >= 0; i--) {
+                        const d = new Date(now.getTime() - i * 3600000);
+                        const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + 'T' + String(d.getHours()).padStart(2,'0');
+                        labels.push(String(d.getHours()).padStart(2, '0') + ':00');
+                        buckets.set(key, 0);
                     }
-                    const labels = Object.keys(hourMap).map(h => String(h).padStart(2, '0') + ':00');
-                    const data = Object.values(hourMap);
+                    for (const d of this.sparklineData) {
+                        const t = new Date(d.time);
+                        const key = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0') + 'T' + String(t.getHours()).padStart(2,'0');
+                        if (buckets.has(key)) buckets.set(key, (buckets.get(key) || 0) + d.count);
+                    }
+                    for (const v of buckets.values()) data.push(v);
 
                     if (_sparklineChart) {
                         _sparklineChart.data.labels = labels;
@@ -1085,13 +1094,15 @@
                                 fill: true,
                                 tension: 0.4,
                                 pointRadius: 0,
+                                pointHoverRadius: 4,
                                 borderWidth: 2
                             }]
                         },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: { legend: { display: false }, tooltip: { enabled: true } },
                             scales: {
                                 x: { display: false },
                                 y: { display: false, beginAtZero: true }
