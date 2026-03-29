@@ -73,7 +73,7 @@ export function injectStreamUsageOption(bodyText: string): string | null {
 export async function extractUsageFromResponse(
   response: Response,
   endpoint: string
-): Promise<{ model: string | null; inputTokens: number | null; outputTokens: number | null } | null> {
+): Promise<{ model: string | null; inputTokens: number | null; outputTokens: number | null; cachedInputTokens: number | null } | null> {
   // Only parse 2xx responses — error responses don't have usage data
   if (response.status < 200 || response.status >= 300) {
     return null
@@ -84,19 +84,22 @@ export async function extractUsageFromResponse(
     const model: string | null = json.model ?? null
     let inputTokens: number | null = null
     let outputTokens: number | null = null
+    let cachedInputTokens: number | null = null
     const usage = json.usage
     if (usage) {
       if (endpoint.includes("/chat/completions")) {
         // OpenAI chat completions format
         inputTokens = typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : null
         outputTokens = typeof usage.completion_tokens === "number" ? usage.completion_tokens : null
+        cachedInputTokens = typeof usage.prompt_tokens_details?.cached_tokens === "number" ? usage.prompt_tokens_details.cached_tokens : null
       } else if (endpoint.includes("/responses")) {
         // OpenAI responses format
         inputTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : null
         outputTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : null
+        cachedInputTokens = typeof usage.input_tokens_details?.cached_tokens === "number" ? usage.input_tokens_details.cached_tokens : null
       }
     }
-    return { model, inputTokens, outputTokens }
+    return { model, inputTokens, outputTokens, cachedInputTokens }
   } catch {
     return null
   }
@@ -104,7 +107,7 @@ export async function extractUsageFromResponse(
 
 export function createStreamTap(
   endpoint: string,
-  onUsage: (usage: { inputTokens: number | null; outputTokens: number | null; model: string | null }) => void
+  onUsage: (usage: { inputTokens: number | null; outputTokens: number | null; cachedInputTokens: number | null; model: string | null }) => void
 ): TransformStream<Uint8Array, Uint8Array> {
   const decoder = new TextDecoder()
   let lineBuffer = ""
@@ -120,10 +123,11 @@ export function createStreamTap(
         if (chunk.usage) {
           const inputTokens = typeof chunk.usage.prompt_tokens === "number" ? chunk.usage.prompt_tokens : null
           const outputTokens = typeof chunk.usage.completion_tokens === "number" ? chunk.usage.completion_tokens : null
+          const cachedInputTokens = typeof chunk.usage.prompt_tokens_details?.cached_tokens === "number" ? chunk.usage.prompt_tokens_details.cached_tokens : null
           const model: string | null = chunk.model ?? null
-          if ((inputTokens !== null || outputTokens !== null) && !usageCalled) {
+          if ((inputTokens !== null || outputTokens !== null || cachedInputTokens !== null) && !usageCalled) {
             usageCalled = true
-            onUsage({ inputTokens, outputTokens, model })
+            onUsage({ inputTokens, outputTokens, cachedInputTokens, model })
           }
         }
       } else if (endpoint.includes("/responses")) {
@@ -134,10 +138,11 @@ export function createStreamTap(
           const u = chunk.response.usage
           const inputTokens = typeof u.input_tokens === "number" ? u.input_tokens : null
           const outputTokens = typeof u.output_tokens === "number" ? u.output_tokens : null
+          const cachedInputTokens = typeof u.input_tokens_details?.cached_tokens === "number" ? u.input_tokens_details.cached_tokens : null
           const model: string | null = chunk.response?.model ?? null
           if (!usageCalled) {
             usageCalled = true
-            onUsage({ inputTokens, outputTokens, model })
+            onUsage({ inputTokens, outputTokens, cachedInputTokens, model })
           }
         }
       }

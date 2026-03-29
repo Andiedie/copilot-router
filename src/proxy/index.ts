@@ -125,6 +125,7 @@ export async function proxyHandler(c: Context) {
           endpoint,
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
+          cachedInputTokens: usage.cachedInputTokens,
           statusCode: upstreamRes.status,
           durationMs: totalDurationMs,
         })
@@ -145,6 +146,7 @@ export async function proxyHandler(c: Context) {
         endpoint,
         inputTokens: usageInfo?.inputTokens ?? null,
         outputTokens: usageInfo?.outputTokens ?? null,
+        cachedInputTokens: usageInfo?.cachedInputTokens ?? null,
         statusCode: upstreamRes.status,
         durationMs,
       })

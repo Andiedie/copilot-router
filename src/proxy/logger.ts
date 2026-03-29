@@ -9,6 +9,7 @@ export interface LogRequestParams {
   endpoint?: string | null
   inputTokens?: number | null
   outputTokens?: number | null
+  cachedInputTokens?: number | null
   statusCode: number
   durationMs: number
   error?: string | null
@@ -28,6 +29,7 @@ export function logRequest(params: LogRequestParams): void {
           endpoint: params.endpoint ?? null,
           input_tokens: params.inputTokens ?? null,
           output_tokens: params.outputTokens ?? null,
+          cached_input_tokens: params.cachedInputTokens ?? null,
           status_code: params.statusCode,
           duration_ms: params.durationMs,
           error: params.error ?? null,
