@@ -34,6 +34,7 @@ export const requests = sqliteTable(
     endpoint: text("endpoint"),
     input_tokens: integer("input_tokens"),
     output_tokens: integer("output_tokens"),
+    cached_input_tokens: integer("cached_input_tokens"),
     status_code: integer("status_code"),
     duration_ms: integer("duration_ms"),
     error: text("error"),

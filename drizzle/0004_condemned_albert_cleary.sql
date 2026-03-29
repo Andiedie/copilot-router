@@ -1,0 +1,1 @@
+ALTER TABLE `requests` ADD `cached_input_tokens` integer;
