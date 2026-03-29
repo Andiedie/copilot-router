@@ -172,10 +172,11 @@
                         <p class="text-3xl font-bold text-gray-900" x-text="stats.today_requests?.toLocaleString() || '0'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Success Rate</h3>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Cache Hit Rate</h3>
+                        <p class="text-xs text-gray-400 mb-1">Today</p>
                         <p class="text-3xl font-bold"
-                           :class="(stats.success_rate ?? 100) >= 95 ? 'text-green-600' : (stats.success_rate ?? 100) >= 80 ? 'text-yellow-600' : 'text-red-600'"
-                           x-text="(stats.success_rate ?? 100).toFixed(1) + '%'"></p>
+                           :class="(stats.today_input_tokens || 0) === 0 ? 'text-gray-400' : ((stats.today_cached_input_tokens || 0) / stats.today_input_tokens * 100) >= 50 ? 'text-green-600' : ((stats.today_cached_input_tokens || 0) / stats.today_input_tokens * 100) >= 20 ? 'text-yellow-600' : 'text-red-600'"
+                           x-text="(stats.today_input_tokens || 0) === 0 ? 'N/A' : (((stats.today_cached_input_tokens || 0) / stats.today_input_tokens) * 100).toFixed(1) + '%'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <h3 class="text-sm font-medium text-gray-500 mb-1">Request Trend</h3>
@@ -195,8 +196,9 @@
                         <p class="text-3xl font-bold text-purple-600" x-text="formatNumber(stats.today_output_tokens || 0)"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Total Tokens Today</h3>
-                        <p class="text-3xl font-bold text-indigo-600" x-text="formatNumber(stats.today_total_tokens || 0)"></p>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Cached Tokens</h3>
+                        <p class="text-xs text-gray-400 mb-1">Today</p>
+                        <p class="text-3xl font-bold text-green-600" x-text="formatNumber(stats.today_cached_input_tokens || 0)"></p>
                     </div>
                 </div>
                 <!-- Metric Cards - Row 3: System Status -->
