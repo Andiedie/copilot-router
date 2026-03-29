@@ -557,7 +557,7 @@
                 </div>
 
                 <!-- KPI Cards -->
-                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
                     <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Requests</p>
                         <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalRequests)"></p>
@@ -573,6 +573,16 @@
                     <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
                         <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</p>
                         <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalTokens)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Cached Input Tokens</p>
+                        <p class="text-2xl font-bold text-green-600 mt-1" x-text="formatNumber(kpi.cachedInputTokens)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Cache Hit Rate</p>
+                        <p class="text-2xl font-bold mt-1"
+                           :class="kpi.inputTokens === 0 ? 'text-gray-400' : kpi.cacheHitRate >= 50 ? 'text-green-600' : kpi.cacheHitRate >= 20 ? 'text-yellow-600' : 'text-red-600'"
+                           x-text="kpi.inputTokens === 0 ? 'N/A' : kpi.cacheHitRate.toFixed(1) + '%'"></p>
                     </div>
                 </div>
 
@@ -660,6 +670,22 @@
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Token Usage by Model</h3>
                         <div class="h-72">
                             <canvas id="chartModelTokens"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 7: Cache Token Trend -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Cache Token Trend</h3>
+                        <div class="h-72">
+                            <canvas id="chartCacheTrend"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 8: Cache Rate by Model -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Cache Rate by Model</h3>
+                        <div class="h-64">
+                            <canvas id="chartCacheRate"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1209,7 +1235,7 @@
                 models: [],
                 apiKeys: [],
                 loading: false,
-                kpi: { totalRequests: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                kpi: { totalRequests: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, cacheHitRate: 0 },
                 trendData: [],
                 keyTokenData: [],
                 heatmapData: [],
@@ -1218,6 +1244,7 @@
                 tokenTrendData: [],
                 keyModelData: [],
                 modelTokenData: [],
+                cacheRateData: [],
                 async init() {
                     this.$watch('$store.router.page', (val) => {
                         if (val === 'stats') this.fetchAll();
@@ -1246,7 +1273,7 @@
                     const q = this.buildQuery();
                     const tq = `interval=${this.grouping}&${q}`;
                     try {
-                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes] = await Promise.all([
+                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes, cacheRateRes] = await Promise.all([
                             $api(`/admin/stats/timeseries?${tq}`),
                             $api(`/admin/stats/token-timeseries?${tq}`),
                             $api(`/admin/stats/key-model-timeseries?${tq}`),
@@ -1254,7 +1281,8 @@
                             $api(`/admin/stats/heatmap?${q}`),
                             $api(`/admin/stats?group_by=account&${q}`),
                             $api(`/admin/stats/models?${q}`),
-                            $api(`/admin/stats/model-token-timeseries?${tq}`)
+                            $api(`/admin/stats/model-token-timeseries?${tq}`),
+                            $api(`/admin/stats/cache-rate-by-model?${q}`)
                         ]);
                         if (trendRes?.ok) this.trendData = await trendRes.json();
                         if (tokenTrendRes?.ok) this.tokenTrendData = await tokenTrendRes.json();
@@ -1264,6 +1292,7 @@
                         if (accountRes?.ok) this.accountData = await accountRes.json();
                         if (modelStatsRes?.ok) this.modelStatsData = await modelStatsRes.json();
                         if (modelTokenRes?.ok) this.modelTokenData = await modelTokenRes.json();
+                        if (cacheRateRes?.ok) this.cacheRateData = await cacheRateRes.json();
                         this.computeKpi();
                     } catch (err) {
                         console.error('Failed to fetch stats', err);
@@ -1277,11 +1306,15 @@
                     const totalRequests = this.trendData.reduce((s, d) => s + d.count, 0);
                     const inputTokens = this.tokenTrendData.reduce((s, d) => s + d.input_tokens, 0);
                     const outputTokens = this.tokenTrendData.reduce((s, d) => s + d.output_tokens, 0);
+                    const cachedInputTokens = this.tokenTrendData.reduce((s, d) => s + (d.cached_input_tokens || 0), 0);
+                    const cacheHitRate = inputTokens === 0 ? 0 : (cachedInputTokens / inputTokens) * 100;
                     this.kpi = {
                         totalRequests,
                         inputTokens,
                         outputTokens,
-                        totalTokens: inputTokens + outputTokens
+                        totalTokens: inputTokens + outputTokens,
+                        cachedInputTokens,
+                        cacheHitRate
                     };
                 },
                 renderCharts() {
@@ -1538,6 +1571,73 @@
                                 scales: {
                                     x: { stacked: true, beginAtZero: true },
                                     y: { stacked: true }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.cacheTrend) _charts.cacheTrend.destroy();
+                    const cacheTrendCtx = document.getElementById('chartCacheTrend');
+                    if (cacheTrendCtx) {
+                        _charts.cacheTrend = new Chart(cacheTrendCtx, {
+                            type: 'line',
+                            data: {
+                                datasets: [
+                                    {
+                                        label: 'Cached Tokens',
+                                        data: this.tokenTrendData.map(d => ({ x: d.time, y: d.cached_input_tokens || 0 })),
+                                        borderColor: '#10b981',
+                                        backgroundColor: 'rgba(16, 185, 129, 0.4)',
+                                        fill: 'origin',
+                                        tension: 0.4,
+                                        pointRadius: 0
+                                    },
+                                    {
+                                        label: 'Uncached Tokens',
+                                        data: this.tokenTrendData.map(d => ({ x: d.time, y: Math.max(0, (d.input_tokens || 0) - (d.cached_input_tokens || 0)) })),
+                                        borderColor: '#9ca3af',
+                                        backgroundColor: 'rgba(156, 163, 175, 0.4)',
+                                        fill: 'origin',
+                                        tension: 0.4,
+                                        pointRadius: 0
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: { legend: { display: true, position: 'top' } },
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { stacked: true, beginAtZero: true }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.cacheRate) _charts.cacheRate.destroy();
+                    const cacheRateCtx = document.getElementById('chartCacheRate');
+                    if (cacheRateCtx) {
+                        const sorted = [...this.cacheRateData].sort((a, b) => b.cache_rate - a.cache_rate);
+                        _charts.cacheRate = new Chart(cacheRateCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: sorted.map(d => d.model),
+                                datasets: [{
+                                    label: 'Cache Rate (%)',
+                                    data: sorted.map(d => d.cache_rate),
+                                    backgroundColor: '#10b981'
+                                }]
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { beginAtZero: true, max: 100 },
+                                    y: {}
                                 }
                             }
                         });
