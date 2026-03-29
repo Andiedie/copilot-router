@@ -221,6 +221,26 @@
                     </div>
                 </div>
 
+                <!-- Metric Cards - Row 4: Estimated Cost -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Estimated Cost Today</h3>
+                        <p class="text-3xl font-bold text-emerald-600" x-text="formatCost(costData.today_cost)"></p>
+                        <p class="text-xs text-gray-400 mt-1">Based on OpenRouter pricing</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Estimated Cost This Week</h3>
+                        <p class="text-3xl font-bold text-emerald-600" x-text="formatCost(costData.week_cost)"></p>
+                        <p class="text-xs text-gray-400 mt-1">Based on OpenRouter pricing</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Estimated Cost This Month</h3>
+                        <p class="text-3xl font-bold text-emerald-600" x-text="formatCost(costData.month_cost)"></p>
+                        <p x-show="costData.unpriced_model_count > 0" class="text-xs text-yellow-500 mt-1" x-text="costData.unpriced_model_count + ' model(s) without pricing'"></p>
+                        <p x-show="!costData.unpriced_model_count || costData.unpriced_model_count === 0" class="text-xs text-gray-400 mt-1">Based on OpenRouter pricing</p>
+                    </div>
+                </div>
+
                 <!-- Pool Status -->
                 <h2 class="text-lg font-bold text-gray-900 mb-4">Account Pool Status</h2>
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -940,6 +960,7 @@
                 loading: false,
                 interval: null,
                 sparklineData: [],
+                costData: {},
                 async init() {
                     // Only fetch if authenticated
                     this.$watch('$store.auth.authenticated', (val) => {
@@ -959,10 +980,11 @@
                 async fetchData() {
                     this.loading = true;
                     try {
-                        const [statsRes, poolRes, sparkRes] = await Promise.all([
+                        const [statsRes, poolRes, sparkRes, costRes] = await Promise.all([
                             $api('/admin/stats/overview'),
                             $api('/admin/pool-status'),
-                            $api('/admin/stats/timeseries?period=today&interval=hour')
+                            $api('/admin/stats/timeseries?period=today&interval=hour'),
+                            $api('/admin/stats/cost-overview')
                         ]);
                         
                         if (statsRes && statsRes.ok) {
@@ -973,6 +995,9 @@
                         }
                         if (sparkRes && sparkRes.ok) {
                             this.sparklineData = await sparkRes.json();
+                        }
+                        if (costRes && costRes.ok) {
+                            this.costData = await costRes.json();
                         }
                     } catch (err) {
                         console.error('Failed to fetch overview data', err);
@@ -1023,6 +1048,14 @@
                             }
                         }
                     });
+                },
+                formatCost(v) {
+                    if (v == null || isNaN(Number(v))) return '—';
+                    const n = Number(v);
+                    if (n === 0) return '$0.00';
+                    if (n < 0.01) return '< $0.01';
+                    if (n >= 1000) return '$' + (n / 1000).toFixed(2) + 'k';
+                    return '$' + n.toFixed(4);
                 },
                 startAutoRefresh() {
                     this.stopAutoRefresh();
