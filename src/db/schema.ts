@@ -48,3 +48,21 @@ export const requests = sqliteTable(
     index("idx_requests_status_code").on(t.status_code),
   ],
 )
+
+export const model_pricing = sqliteTable(
+  "model_pricing",
+  {
+    id: text("id").primaryKey(),
+    copilot_model_name: text("copilot_model_name").notNull().unique(),
+    openrouter_model_id: text("openrouter_model_id"),
+    display_name: text("display_name"),
+    prompt_price: text("prompt_price").notNull(),
+    completion_price: text("completion_price").notNull(),
+    cache_read_price: text("cache_read_price"),
+    source: text("source").notNull(),
+    last_synced_at: integer("last_synced_at"),
+    created_at: integer("created_at").notNull(),
+    updated_at: integer("updated_at").notNull(),
+  },
+  (t) => [index("idx_model_pricing_copilot_name").on(t.copilot_model_name)],
+)

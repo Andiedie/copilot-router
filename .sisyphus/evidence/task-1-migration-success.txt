@@ -1,0 +1,18 @@
+bun run db:generate && bun run db:migrate
+$ bunx drizzle-kit generate
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/Users/andie/code/Andiedie/copilot-router/drizzle.config.ts'
+4 tables
+accounts 10 columns 0 indexes 0 fks
+api_keys 8 columns 0 indexes 0 fks
+model_pricing 11 columns 2 indexes 0 fks
+requests 12 columns 5 indexes 0 fks
+
+[✓] Your SQL migration file ➜ drizzle/0005_quick_landau.sql 🚀
+$ bun src/db/migrate.ts
+Migration complete
+
+Health check
+$ curl -s -o /tmp/copilot-router-health.out -w "%{http_code}" -H "Authorization: Bearer test" http://localhost:4141/admin/health
+200
+{"status":"ok","uptime":2.009053083}
