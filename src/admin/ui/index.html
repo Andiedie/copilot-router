@@ -607,6 +607,22 @@
                     </div>
                 </div>
 
+                <!-- Cost KPIs -->
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Estimated Total Cost</p>
+                        <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCost(kpi.totalCost)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg Cost / Request</p>
+                        <p class="text-2xl font-bold text-emerald-600 mt-1" x-text="formatCost(kpi.avgCostPerRequest)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Est. Cache Savings</p>
+                        <p class="text-2xl font-bold text-green-600 mt-1" x-text="formatCost(kpi.cacheSavings)"></p>
+                    </div>
+                </div>
+
                 <!-- Charts Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <!-- Row 1: API Key × Model Requests -->
@@ -708,6 +724,35 @@
                         <div class="h-64">
                             <canvas id="chartCacheRate"></canvas>
                         </div>
+                    </div>
+
+                    <!-- Row 9: Cost Trend -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Estimated Cost Trend</h3>
+                        <div class="h-72"><canvas id="chartCostTrend"></canvas></div>
+                    </div>
+
+                    <!-- Row 10: Model Cost Ranking | API Key Cost Distribution -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Cost Ranking</h3>
+                        <div class="h-64"><canvas id="chartModelCost"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Cost Distribution</h3>
+                        <div class="h-64"><canvas id="chartKeyCost"></canvas></div>
+                    </div>
+
+                    <!-- Row 11: Cost by Model Over Time -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Cost by Model Over Time</h3>
+                        <div class="h-72"><canvas id="chartModelCostArea"></canvas></div>
+                    </div>
+
+                    <!-- Row 12: Cache Savings Trend -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Estimated Cache Savings</h3>
+                        <p class="text-sm text-gray-500 mb-3">Money saved by using cached tokens instead of fresh input tokens</p>
+                        <div class="h-72"><canvas id="chartCacheSavings"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -1388,7 +1433,7 @@
                 models: [],
                 apiKeys: [],
                 loading: false,
-                kpi: { totalRequests: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, cacheHitRate: 0 },
+                kpi: { totalRequests: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0, cacheHitRate: 0, totalCost: 0, avgCostPerRequest: 0, cacheSavings: 0 },
                 trendData: [],
                 keyTokenData: [],
                 heatmapData: [],
@@ -1398,6 +1443,10 @@
                 keyModelData: [],
                 modelTokenData: [],
                 cacheRateData: [],
+                costTrendData: [],
+                costByModelData: [],
+                costByKeyData: [],
+                cacheSavingsData: [],
                 async init() {
                     this.$watch('$store.router.page', (val) => {
                         if (val === 'stats') this.fetchAll();
@@ -1426,7 +1475,7 @@
                     const q = this.buildQuery();
                     const tq = `interval=${this.grouping}&${q}`;
                     try {
-                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes, cacheRateRes] = await Promise.all([
+                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes, cacheRateRes, costTrendRes, costByModelRes, costByKeyRes, cacheSavingsRes] = await Promise.all([
                             $api(`/admin/stats/timeseries?${tq}`),
                             $api(`/admin/stats/token-timeseries?${tq}`),
                             $api(`/admin/stats/key-model-timeseries?${tq}`),
@@ -1435,7 +1484,11 @@
                             $api(`/admin/stats?group_by=account&${q}`),
                             $api(`/admin/stats/models?${q}`),
                             $api(`/admin/stats/model-token-timeseries?${tq}`),
-                            $api(`/admin/stats/cache-rate-by-model?${q}`)
+                            $api(`/admin/stats/cache-rate-by-model?${q}`),
+                            $api(`/admin/stats/cost-timeseries?interval=day&${q}`),
+                            $api(`/admin/stats/cost-by-model?${q}`),
+                            $api(`/admin/stats/cost-by-key?${q}`),
+                            $api(`/admin/stats/cache-savings?interval=day&${q}`)
                         ]);
                         if (trendRes?.ok) this.trendData = await trendRes.json();
                         if (tokenTrendRes?.ok) this.tokenTrendData = await tokenTrendRes.json();
@@ -1446,6 +1499,10 @@
                         if (modelStatsRes?.ok) this.modelStatsData = await modelStatsRes.json();
                         if (modelTokenRes?.ok) this.modelTokenData = await modelTokenRes.json();
                         if (cacheRateRes?.ok) this.cacheRateData = await cacheRateRes.json();
+                        if (costTrendRes?.ok) this.costTrendData = await costTrendRes.json();
+                        if (costByModelRes?.ok) this.costByModelData = await costByModelRes.json();
+                        if (costByKeyRes?.ok) this.costByKeyData = await costByKeyRes.json();
+                        if (cacheSavingsRes?.ok) this.cacheSavingsData = await cacheSavingsRes.json();
                         this.computeKpi();
                     } catch (err) {
                         console.error('Failed to fetch stats', err);
@@ -1461,13 +1518,19 @@
                     const outputTokens = this.tokenTrendData.reduce((s, d) => s + d.output_tokens, 0);
                     const cachedInputTokens = this.tokenTrendData.reduce((s, d) => s + (d.cached_input_tokens || 0), 0);
                     const cacheHitRate = inputTokens === 0 ? 0 : (cachedInputTokens / inputTokens) * 100;
+                    const totalCost = this.costByModelData.reduce((s, d) => s + Number(d.total_cost || 0), 0);
+                    const avgCostPerRequest = totalRequests === 0 ? 0 : totalCost / totalRequests;
+                    const cacheSavings = this.cacheSavingsData.reduce((s, d) => s + Number(d.savings || 0), 0);
                     this.kpi = {
                         totalRequests,
                         inputTokens,
                         outputTokens,
                         totalTokens: inputTokens + outputTokens,
                         cachedInputTokens,
-                        cacheHitRate
+                        cacheHitRate,
+                        totalCost,
+                        avgCostPerRequest,
+                        cacheSavings
                     };
                 },
                 renderCharts() {
@@ -1795,6 +1858,170 @@
                             }
                         });
                     }
+
+                    if (_charts.costTrend) _charts.costTrend.destroy();
+                    const costTrendCtx = document.getElementById('chartCostTrend');
+                    if (costTrendCtx) {
+                        _charts.costTrend = new Chart(costTrendCtx, {
+                            type: 'line',
+                            data: {
+                                datasets: [{
+                                    label: 'Estimated Cost ($)',
+                                    data: this.costTrendData.map(d => ({ x: d.time, y: Number(d.total_cost || 0) })),
+                                    borderColor: '#059669',
+                                    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: { callbacks: { label: (item) => '$' + Number(item.raw.y).toFixed(4) } }
+                                },
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { beginAtZero: true, ticks: { callback: (v) => '$' + Number(v).toFixed(4) } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.modelCost) _charts.modelCost.destroy();
+                    const modelCostCtx = document.getElementById('chartModelCost');
+                    if (modelCostCtx) {
+                        const sorted = [...this.costByModelData].sort((a, b) => Number(b.total_cost || 0) - Number(a.total_cost || 0));
+                        _charts.modelCost = new Chart(modelCostCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: sorted.map(d => d.model),
+                                datasets: [
+                                    {
+                                        label: 'Input Cost ($)',
+                                        data: sorted.map(d => Number(d.input_cost || 0)),
+                                        backgroundColor: '#3b82f6'
+                                    },
+                                    {
+                                        label: 'Output Cost ($)',
+                                        data: sorted.map(d => Number(d.output_cost || 0)),
+                                        backgroundColor: '#059669'
+                                    }
+                                ]
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: true, position: 'top' },
+                                    tooltip: {
+                                        callbacks: {
+                                            afterBody: (items) => 'Total: $' + items.reduce((s, i) => s + i.raw, 0).toFixed(4)
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: { stacked: true, beginAtZero: true, ticks: { callback: (v) => '$' + Number(v).toFixed(4) } },
+                                    y: { stacked: true }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.keyCost) _charts.keyCost.destroy();
+                    const keyCostCtx = document.getElementById('chartKeyCost');
+                    if (keyCostCtx) {
+                        _charts.keyCost = new Chart(keyCostCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: this.costByKeyData.map(d => d.key_name || 'Unknown'),
+                                datasets: [{
+                                    data: this.costByKeyData.map(d => Number(d.total_cost || 0)),
+                                    backgroundColor: COLORS.slice(0, this.costByKeyData.length),
+                                    borderWidth: 2,
+                                    borderColor: '#fff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'right' },
+                                    tooltip: { callbacks: { label: (item) => item.label + ': $' + Number(item.raw).toFixed(4) } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.modelCostArea) _charts.modelCostArea.destroy();
+                    const modelCostAreaCtx = document.getElementById('chartModelCostArea');
+                    if (modelCostAreaCtx) {
+                        _charts.modelCostArea = new Chart(modelCostAreaCtx, {
+                            type: 'line',
+                            data: {
+                                datasets: [{
+                                    label: 'Total Cost ($)',
+                                    data: this.costTrendData.map(d => ({ x: d.time, y: Number(d.total_cost || 0) })),
+                                    borderColor: '#059669',
+                                    backgroundColor: 'rgba(5, 150, 105, 0.2)',
+                                    fill: 'origin',
+                                    tension: 0.4,
+                                    pointRadius: 0
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: { callbacks: { label: (item) => '$' + Number(item.raw.y).toFixed(4) } }
+                                },
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { beginAtZero: true, ticks: { callback: (v) => '$' + Number(v).toFixed(4) } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.cacheSavings) _charts.cacheSavings.destroy();
+                    const cacheSavingsCtx = document.getElementById('chartCacheSavings');
+                    if (cacheSavingsCtx) {
+                        _charts.cacheSavings = new Chart(cacheSavingsCtx, {
+                            type: 'line',
+                            data: {
+                                datasets: [
+                                    {
+                                        label: 'Cache Savings ($)',
+                                        data: this.cacheSavingsData.map(d => ({ x: d.time, y: Number(d.savings || 0) })),
+                                        borderColor: '#10b981',
+                                        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                                        fill: 'origin',
+                                        tension: 0.4
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { display: true, position: 'top' },
+                                    tooltip: {
+                                        callbacks: { label: (item) => item.dataset.label + ': $' + Number(item.raw.y).toFixed(4) }
+                                    }
+                                },
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { beginAtZero: true, ticks: { callback: (v) => '$' + Number(v).toFixed(4) } }
+                                }
+                            }
+                        });
+                    }
                 },
                 setPeriod(p) {
                     this.period = p;
@@ -1813,6 +2040,14 @@
                     const max = Math.max(...this.heatmapData.map(d => d.count), 1);
                     const intensity = Math.max(0.15, count / max);
                     return `rgba(59, 130, 246, ${intensity})`;
+                },
+                formatCost(v) {
+                    if (v == null || isNaN(Number(v))) return '—';
+                    const n = Number(v);
+                    if (n === 0) return '$0.00';
+                    if (n < 0.01) return '< $0.01';
+                    if (n >= 1000) return '$' + (n / 1000).toFixed(2) + 'k';
+                    return '$' + n.toFixed(4);
                 }
             }
         }
