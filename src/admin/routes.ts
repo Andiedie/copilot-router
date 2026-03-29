@@ -7,7 +7,7 @@ import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBi
 import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel, getCacheRateByKey, getCostOverview, getCostTimeSeries, getCostByModel, getCostByKey, getCacheSavings } from '../stats'
 import { getPoolStatus } from '../account/pool'
 import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams, CacheRateByModelParams, CostModelParams } from '../stats'
-import { syncFromOpenRouter, listPricing, updatePricing, deletePricing, createManualPricing } from '../pricing'
+import { syncFromOpenRouter, listPricing, updatePricing, deletePricing, createManualPricing, listOpenRouterModels } from '../pricing'
 
 const adminApp = new Hono()
 
@@ -358,6 +358,14 @@ adminApp.post('/pricing/sync', async (c) => {
 adminApp.get('/pricing', async (c) => {
   const result = await listPricing()
   return c.json(result)
+})
+
+adminApp.get('/pricing/openrouter-models', async (c) => {
+  const result = await listOpenRouterModels()
+  if (!result.success) {
+    return c.json({ error: result.error }, 500)
+  }
+  return c.json({ models: result.models })
 })
 
 adminApp.post('/pricing', async (c) => {

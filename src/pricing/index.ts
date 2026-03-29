@@ -40,6 +40,12 @@ function now(): number {
 
 // ─── matchModelName ───
 
+function normalizeModelName(name: string): string {
+  const bare = name.includes("/") ? name.slice(name.indexOf("/") + 1) : name
+  // normalize dates: 2026-03-05 → 20260305
+  return bare.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$1$2$3").toLowerCase()
+}
+
 export function matchModelName(
   copilotName: string,
   openrouterModels: Array<{ id: string; name: string; pricing: any }>,
@@ -54,10 +60,22 @@ export function matchModelName(
 
   if (suffixMatches.length === 1) return suffixMatches[0]
 
-  // 3. If multiple suffix matches, pick shortest id (most canonical)
+  // Multiple suffix matches → pick shortest id (most canonical)
   if (suffixMatches.length > 1) {
     suffixMatches.sort((a, b) => a.id.length - b.id.length)
     return suffixMatches[0]
+  }
+
+  const normalizedCopilot = normalizeModelName(copilotName)
+  const normalizedMatches = openrouterModels.filter(
+    (m) => normalizeModelName(m.id) === normalizedCopilot,
+  )
+
+  if (normalizedMatches.length === 1) return normalizedMatches[0]
+
+  if (normalizedMatches.length > 1) {
+    normalizedMatches.sort((a, b) => a.id.length - b.id.length)
+    return normalizedMatches[0]
   }
 
   return null
@@ -263,6 +281,49 @@ export async function deletePricing(
       sql.raw(`DELETE FROM model_pricing WHERE id = '${escSql(id)}'`),
     )
     return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err.message ?? String(err) }
+  }
+}
+
+// ─── listOpenRouterModels ───
+
+let orModelsCache: { models: Array<{ id: string; name: string; pricing: any }>; fetchedAt: number } | null = null
+const OR_CACHE_TTL = 5 * 60 * 1000
+
+export async function listOpenRouterModels(): Promise<
+  | { success: true; models: Array<{ id: string; name: string; pricing: { prompt?: string; completion?: string; input_cache_read?: string } }> }
+  | { success: false; error: string }
+> {
+  if (orModelsCache && Date.now() - orModelsCache.fetchedAt < OR_CACHE_TTL) {
+    return { success: true, models: orModelsCache.models }
+  }
+
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/models")
+    if (!res.ok) {
+      return { success: false, error: `OpenRouter API error: ${res.status}` }
+    }
+
+    const data = (await res.json()) as { data: OpenRouterModel[] }
+    if (!data.data || !Array.isArray(data.data)) {
+      return { success: false, error: "Invalid response format from OpenRouter" }
+    }
+
+    const models = data.data
+      .filter((m) => m.pricing && (m.pricing.prompt || m.pricing.completion))
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        pricing: {
+          prompt: m.pricing.prompt,
+          completion: m.pricing.completion,
+          input_cache_read: m.pricing.input_cache_read,
+        },
+      }))
+
+    orModelsCache = { models, fetchedAt: Date.now() }
+    return { success: true, models }
   } catch (err: any) {
     return { success: false, error: err.message ?? String(err) }
   }
