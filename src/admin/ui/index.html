@@ -6,7 +6,8 @@
     <title>Copilot Router Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
     <style>
         [x-cloak] { display: none !important; }
     </style>
@@ -38,6 +39,7 @@
             Alpine.store('auth', {
                 token: localStorage.getItem('cr_admin_token') || '',
                 authenticated: false,
+                ready: false,
                 async init() {
                     if (this.token) {
                         const res = await $api('/admin/health');
@@ -48,6 +50,7 @@
                             localStorage.removeItem('cr_admin_token');
                         }
                     }
+                    this.ready = true;
                 },
                 async login(password) {
                     localStorage.setItem('cr_admin_token', password);
@@ -107,7 +110,7 @@
     </div>
 
     <!-- Login Screen -->
-    <div x-show="!$store.auth.authenticated" x-cloak class="absolute inset-0 bg-gray-100 flex items-center justify-center z-40">
+    <div x-show="$store.auth.ready && !$store.auth.authenticated" x-cloak class="absolute inset-0 bg-gray-100 flex items-center justify-center z-40">
         <div class="bg-white p-8 rounded-lg shadow-md w-96" x-data="{ password: '' }">
             <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">Copilot Router Admin</h1>
             <form @submit.prevent="$store.auth.login(password)">
@@ -121,7 +124,7 @@
     </div>
 
     <!-- Main Layout -->
-    <div x-show="$store.auth.authenticated" x-cloak class="flex w-full h-full">
+    <div x-show="$store.auth.ready && $store.auth.authenticated" x-cloak class="flex w-full h-full">
         
         <!-- Sidebar -->
         <aside class="w-64 bg-gray-900 text-white flex flex-col flex-shrink-0">
@@ -174,10 +177,10 @@
                            x-text="(stats.success_rate ?? 100).toFixed(1) + '%'"></p>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-sm font-medium text-gray-500 mb-1">Avg Latency</h3>
-                        <p class="text-3xl font-bold"
-                           :class="(stats.avg_duration_ms ?? 0) < 1000 ? 'text-green-600' : (stats.avg_duration_ms ?? 0) < 3000 ? 'text-yellow-600' : 'text-red-600'"
-                           x-text="(stats.avg_duration_ms ?? 0).toFixed(0) + ' ms'"></p>
+                        <h3 class="text-sm font-medium text-gray-500 mb-1">Request Trend</h3>
+                        <div style="height: 60px;">
+                            <canvas id="overviewSparkline"></canvas>
+                        </div>
                     </div>
                 </div>
                 <!-- Metric Cards - Row 2: Token Metrics -->
@@ -502,22 +505,114 @@
             </div>
 
             <div x-show="$store.router.page === 'stats'" x-data="statsPage()" x-init="init()">
-                <div class="flex justify-between items-center mb-6">
+                <!-- Filter Bar -->
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
                     <h1 class="text-2xl font-bold text-gray-900">Statistics</h1>
-                    <div class="flex gap-2 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
-                        <template x-for="p in ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days']" :key="p">
-                            <button @click="setPeriod(p)" 
-                                    class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-                                    :class="period === p ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'"
-                                    x-text="p.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')">
-                            </button>
-                        </template>
+                    <div class="flex flex-wrap gap-3 items-center">
+                        <!-- Model filter -->
+                        <select x-model="filterModel" @change="fetchAll()"
+                                class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Models</option>
+                            <template x-for="m in models" :key="m">
+                                <option :value="m" x-text="m"></option>
+                            </template>
+                        </select>
+                        <!-- API Key filter -->
+                        <select x-model="filterApiKey" @change="fetchAll()"
+                                class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All API Keys</option>
+                            <template x-for="k in apiKeys" :key="k.id">
+                                <option :value="k.id" x-text="k.name"></option>
+                            </template>
+                        </select>
+                        <!-- Grouping pills -->
+                        <div class="flex gap-1 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                            <template x-for="g in [{v:'hour',l:'Hour'},{v:'day',l:'Day'},{v:'week',l:'Week'}]" :key="g.v">
+                                <button @click="setGrouping(g.v)"
+                                        class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                                        :class="grouping === g.v ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'"
+                                        x-text="g.l">
+                                </button>
+                            </template>
+                        </div>
+                        <!-- Period pills -->
+                        <div class="flex gap-1 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                            <template x-for="p in ['today', 'yesterday', 'this_week', 'this_month', 'last_30_days']" :key="p">
+                                <button @click="setPeriod(p)" 
+                                        class="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
+                                        :class="period === p ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'"
+                                        x-text="p.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')">
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Requests</p>
+                        <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalRequests)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Input Tokens</p>
+                        <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.inputTokens)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Output Tokens</p>
+                        <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.outputTokens)"></p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Tokens</p>
+                        <p class="text-2xl font-bold text-gray-900 mt-1" x-text="formatNumber(kpi.totalTokens)"></p>
                     </div>
                 </div>
 
                 <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading statistics...</div>
 
+                <!-- Charts Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Row 1: API Key × Model Requests -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key × Model Requests</h3>
+                        <div class="h-80">
+                            <canvas id="chartKeyModel"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Top Models Ranking | Hourly Heatmap -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Top Models Ranking</h3>
+                        <div class="h-64">
+                            <canvas id="chartTopModels"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Hourly Heatmap</h3>
+                        <div class="h-64 flex flex-col">
+                            <div class="flex-1 grid gap-px" style="grid-template-columns: 36px repeat(24, 1fr); grid-template-rows: auto repeat(7, 1fr)">
+                                <!-- Header row: empty corner + 24 hour labels -->
+                                <div></div>
+                                <template x-for="h in 24" :key="'hm-h-'+h">
+                                    <div class="flex items-center justify-center text-xs text-gray-400" x-text="h - 1"></div>
+                                </template>
+                                <!-- 7 day rows -->
+                                <template x-for="(day, di) in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="'hm-d-'+di">
+                                    <template x-for="ci in 25" :key="'hm-'+di+'-'+ci">
+                                        <div x-show="true"
+                                             class="flex items-center justify-center"
+                                             :class="ci === 1 ? 'text-xs text-gray-500 font-medium pr-1 justify-end' : 'rounded-sm'"
+                                             :style="ci > 1 ? 'background-color:' + heatmapColor(getHeatmapCell(di, ci - 2)) : ''"
+                                             :title="ci > 1 ? getHeatmapCell(di, ci - 2) + ' requests (' + day + ' ' + (ci-2) + ':00)' : ''"
+                                             x-text="ci === 1 ? day : ''">
+                                        </div>
+                                    </template>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Request Trend -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Request Trend</h3>
                         <div class="h-72">
@@ -525,35 +620,7 @@
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key × Model Usage</h3>
-                        <div class="h-72">
-                            <canvas id="chartKeyModel"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Token Usage</h3>
-                        <div class="h-72">
-                            <canvas id="chartModelTokens"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Usage</h3>
-                        <div class="h-64">
-                            <canvas id="chartKeys"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Usage</h3>
-                        <div class="h-64">
-                            <canvas id="chartAccounts"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Token Usage Trend - full width -->
+                    <!-- Row 4: Token Usage Trend -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
                         <h3 class="text-lg font-medium text-gray-900 mb-4">Token Usage Trend</h3>
                         <div class="h-72">
@@ -561,18 +628,25 @@
                         </div>
                     </div>
 
-                    <!-- Model Distribution - half width -->
+                    <!-- Row 5: API Key Token Usage | Account Load Distribution -->
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Distribution</h3>
-                        <div class="h-64 flex justify-center">
-                            <canvas id="chartModelDist"></canvas>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Token Usage</h3>
+                        <div class="h-64">
+                            <canvas id="chartKeyTokens"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Account Load Distribution</h3>
+                        <div class="h-64">
+                            <canvas id="chartAccountLoad"></canvas>
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Status Code Distribution</h3>
-                        <div class="h-64 flex justify-center">
-                            <canvas id="chartStatus"></canvas>
+                    <!-- Row 6: Token Usage by Model -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Token Usage by Model</h3>
+                        <div class="h-72">
+                            <canvas id="chartModelTokens"></canvas>
                         </div>
                     </div>
                 </div>
@@ -590,7 +664,7 @@
                 <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex gap-4 items-end">
                     <div class="flex-1">
                         <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
-                        <select x-model="filters.api_key_id" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                        <select x-model="filters.api_key_id" @change="applyFilters()" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
                             <option value="">All</option>
                             <template x-for="k in apiKeys" :key="k.id">
                                 <option :value="k.id" x-text="k.name"></option>
@@ -598,12 +672,14 @@
                         </select>
                     </div>
                     <div class="flex-1">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Status Code</label>
-                        <input type="number" x-model="filters.status_code" @keydown.enter="applyFilters()" placeholder="e.g. 200" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                        <select x-model="filters.model" @change="applyFilters()" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                            <option value="">All</option>
+                            <template x-for="m in models" :key="m">
+                                <option :value="m" x-text="m"></option>
+                            </template>
+                        </select>
                     </div>
-                    <button @click="applyFilters()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors text-sm font-medium h-[38px]">
-                        Apply Filters
-                    </button>
                 </div>
 
                 <div x-show="loading" class="text-gray-500 text-sm mb-4">Loading requests...</div>
@@ -695,11 +771,13 @@
         }
 
         function overviewPage() {
+            let _sparklineChart = null;
             return {
                 stats: {},
                 pool: {},
                 loading: false,
                 interval: null,
+                sparklineData: [],
                 async init() {
                     // Only fetch if authenticated
                     this.$watch('$store.auth.authenticated', (val) => {
@@ -719,9 +797,10 @@
                 async fetchData() {
                     this.loading = true;
                     try {
-                        const [statsRes, poolRes] = await Promise.all([
+                        const [statsRes, poolRes, sparkRes] = await Promise.all([
                             $api('/admin/stats/overview'),
-                            $api('/admin/pool-status')
+                            $api('/admin/pool-status'),
+                            $api('/admin/stats/timeseries?period=today&interval=hour')
                         ]);
                         
                         if (statsRes && statsRes.ok) {
@@ -730,11 +809,58 @@
                         if (poolRes && poolRes.ok) {
                             this.pool = await poolRes.json();
                         }
+                        if (sparkRes && sparkRes.ok) {
+                            this.sparklineData = await sparkRes.json();
+                        }
                     } catch (err) {
                         console.error('Failed to fetch overview data', err);
                     } finally {
                         this.loading = false;
                     }
+                    this.$nextTick(() => this.renderSparkline());
+                },
+                renderSparkline() {
+                    const ctx = document.getElementById('overviewSparkline');
+                    if (!ctx) return;
+                    const hourMap = {};
+                    for (let h = 0; h < 24; h++) hourMap[h] = 0;
+                    for (const d of this.sparklineData) {
+                        const hour = new Date(d.time).getHours();
+                        hourMap[hour] = (hourMap[hour] || 0) + d.count;
+                    }
+                    const labels = Object.keys(hourMap).map(h => String(h).padStart(2, '0') + ':00');
+                    const data = Object.values(hourMap);
+
+                    if (_sparklineChart) {
+                        _sparklineChart.data.labels = labels;
+                        _sparklineChart.data.datasets[0].data = data;
+                        _sparklineChart.update('none');
+                        return;
+                    }
+                    _sparklineChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels,
+                            datasets: [{
+                                data,
+                                borderColor: '#6b8fbd',
+                                backgroundColor: 'rgba(107, 143, 189, 0.15)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                            scales: {
+                                x: { display: false },
+                                y: { display: false, beginAtZero: true }
+                            }
+                        }
+                    });
                 },
                 startAutoRefresh() {
                     this.stopAutoRefresh();
@@ -1061,13 +1187,19 @@
         function statsPage() {
             return {
                 period: 'this_month',
+                grouping: 'hour',
+                filterModel: '',
+                filterApiKey: '',
+                models: [],
+                apiKeys: [],
                 loading: false,
+                kpi: { totalRequests: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0 },
                 trendData: [],
+                keyTokenData: [],
+                heatmapData: [],
                 accountData: [],
-                keyData: [],
-                statusData: [],
+                modelStatsData: [],
                 tokenTrendData: [],
-                modelData: [],
                 keyModelData: [],
                 modelTokenData: [],
                 async init() {
@@ -1075,30 +1207,48 @@
                         if (val === 'stats') this.fetchAll();
                     });
                     if (Alpine.store('router').page === 'stats') {
+                        await this.fetchFilterOptions();
                         await this.fetchAll();
                     }
                 },
+                async fetchFilterOptions() {
+                    const [modelsRes, keysRes] = await Promise.all([
+                        $api('/admin/stats/distinct-models'),
+                        $api('/admin/keys')
+                    ]);
+                    if (modelsRes?.ok) this.models = await modelsRes.json();
+                    if (keysRes?.ok) this.apiKeys = await keysRes.json();
+                },
+                buildQuery() {
+                    const params = new URLSearchParams({ period: this.period });
+                    if (this.filterModel) params.append('model', this.filterModel);
+                    if (this.filterApiKey) params.append('api_key_id', this.filterApiKey);
+                    return params.toString();
+                },
                 async fetchAll() {
                     this.loading = true;
+                    const q = this.buildQuery();
+                    const tq = `interval=${this.grouping}&${q}`;
                     try {
-                        const [trendRes, accountRes, keyRes, statusRes, tokenTrendRes, modelRes, keyModelRes, modelTokenRes] = await Promise.all([
-                            $api(`/admin/stats/timeseries?interval=hour&period=${this.period}`),
-                            $api(`/admin/stats?group_by=account&period=${this.period}`),
-                            $api(`/admin/stats?group_by=api_key&period=${this.period}`),
-                            $api(`/admin/stats?group_by=status_code&period=${this.period}`),
-                            $api(`/admin/stats/token-timeseries?interval=hour&period=${this.period}`),
-                            $api(`/admin/stats/models?period=${this.period}`),
-                            $api(`/admin/stats/key-model-timeseries?interval=hour&period=${this.period}`),
-                            $api(`/admin/stats/model-token-timeseries?interval=hour&period=${this.period}`)
+                        const [trendRes, tokenTrendRes, keyModelRes, keyTokenRes, heatmapRes, accountRes, modelStatsRes, modelTokenRes] = await Promise.all([
+                            $api(`/admin/stats/timeseries?${tq}`),
+                            $api(`/admin/stats/token-timeseries?${tq}`),
+                            $api(`/admin/stats/key-model-timeseries?${tq}`),
+                            $api(`/admin/stats/key-tokens?${q}`),
+                            $api(`/admin/stats/heatmap?${q}`),
+                            $api(`/admin/stats?group_by=account&${q}`),
+                            $api(`/admin/stats/models?${q}`),
+                            $api(`/admin/stats/model-token-timeseries?${tq}`)
                         ]);
                         if (trendRes?.ok) this.trendData = await trendRes.json();
-                        if (accountRes?.ok) this.accountData = await accountRes.json();
-                        if (keyRes?.ok) this.keyData = await keyRes.json();
-                        if (statusRes?.ok) this.statusData = await statusRes.json();
                         if (tokenTrendRes?.ok) this.tokenTrendData = await tokenTrendRes.json();
-                        if (modelRes?.ok) this.modelData = await modelRes.json();
                         if (keyModelRes?.ok) this.keyModelData = await keyModelRes.json();
+                        if (keyTokenRes?.ok) this.keyTokenData = await keyTokenRes.json();
+                        if (heatmapRes?.ok) this.heatmapData = await heatmapRes.json();
+                        if (accountRes?.ok) this.accountData = await accountRes.json();
+                        if (modelStatsRes?.ok) this.modelStatsData = await modelStatsRes.json();
                         if (modelTokenRes?.ok) this.modelTokenData = await modelTokenRes.json();
+                        this.computeKpi();
                     } catch (err) {
                         console.error('Failed to fetch stats', err);
                     } finally {
@@ -1106,6 +1256,17 @@
                     }
                     await this.$nextTick();
                     this.renderCharts();
+                },
+                computeKpi() {
+                    const totalRequests = this.trendData.reduce((s, d) => s + d.count, 0);
+                    const inputTokens = this.tokenTrendData.reduce((s, d) => s + d.input_tokens, 0);
+                    const outputTokens = this.tokenTrendData.reduce((s, d) => s + d.output_tokens, 0);
+                    this.kpi = {
+                        totalRequests,
+                        inputTokens,
+                        outputTokens,
+                        totalTokens: inputTokens + outputTokens
+                    };
                 },
                 renderCharts() {
                     const COLORS = ['#6b8fbd', '#7db89e', '#c9a96e', '#c27878', '#9b8cbf', '#c48ba0', '#6bacb5', '#c9926b', '#7bb5a8', '#a98bc9', '#c47882', '#9ab86b'];
@@ -1117,100 +1278,25 @@
                         _charts.trend = new Chart(trendCtx, {
                             type: 'line',
                             data: {
-                                labels: this.trendData.map(d => new Date(d.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
-                                datasets: [
-                                    {
-                                        label: 'Total Requests',
-                                        data: this.trendData.map(d => d.count),
-                                        borderColor: '#3b82f6',
-                                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                        fill: true,
-                                        tension: 0.4
-                                    }
-                                ]
+                                datasets: [{
+                                    label: 'Requests',
+                                    data: this.trendData.map(d => ({ x: d.time, y: d.count })),
+                                    borderColor: '#3b82f6',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    fill: true,
+                                    tension: 0.4
+                                }]
                             },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
                                 interaction: { mode: 'index', intersect: false },
                                 plugins: { legend: { display: false } },
-                                scales: { y: { beginAtZero: true } }
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { beginAtZero: true }
+                                }
                             }
-                        });
-                    }
-
-                    if (_charts.keyModel) _charts.keyModel.destroy();
-                    const keyModelCtx = document.getElementById('chartKeyModel');
-                    if (keyModelCtx) {
-                        const timeLabels = [...new Set(this.keyModelData.map(d => d.time))].sort();
-                        const seriesKeys = [...new Set(this.keyModelData.map(d => `${d.key_name} / ${d.model}`))];
-                        const datasets = seriesKeys.map((sk, i) => {
-                            const colorIdx = i % COLORS.length;
-                            const dataMap = {};
-                            this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk).forEach(d => { dataMap[d.time] = d.count; });
-                            return {
-                                label: sk,
-                                data: timeLabels.map(t => dataMap[t] || 0),
-                                borderColor: COLORS[colorIdx],
-                                backgroundColor: BG_COLORS[colorIdx],
-                                fill: 'origin',
-                                tension: 0.4,
-                                pointRadius: 0
-                            };
-                        });
-                        _charts.keyModel = new Chart(keyModelCtx, {
-                            type: 'line',
-                            data: {
-                                labels: timeLabels.map(t => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
-                                datasets
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                interaction: { mode: 'index', intersect: false },
-                                plugins: {
-                                    legend: { display: true, position: 'top' },
-                                    tooltip: {
-                                        filter: (item) => item.raw > 0,
-                                        itemSort: (a, b) => b.raw - a.raw
-                                    }
-                                },
-                                scales: { y: { stacked: true, beginAtZero: true } }
-                            }
-                        });
-                    }
-
-                    if (_charts.keys) _charts.keys.destroy();
-                    const keysCtx = document.getElementById('chartKeys');
-                    if (keysCtx) {
-                        _charts.keys = new Chart(keysCtx, {
-                            type: 'bar',
-                            data: {
-                                labels: this.keyData.map(d => d.label || 'Unknown'),
-                                datasets: [{
-                                    label: 'Requests',
-                                    data: this.keyData.map(d => d.count),
-                                    backgroundColor: '#8b5cf6'
-                                }]
-                            },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-                        });
-                    }
-
-                    if (_charts.accounts) _charts.accounts.destroy();
-                    const accountsCtx = document.getElementById('chartAccounts');
-                    if (accountsCtx) {
-                        _charts.accounts = new Chart(accountsCtx, {
-                            type: 'bar',
-                            data: {
-                                labels: this.accountData.map(d => d.label || 'Unknown'),
-                                datasets: [{
-                                    label: 'Requests',
-                                    data: this.accountData.map(d => d.count),
-                                    backgroundColor: '#3b82f6'
-                                }]
-                            },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
                         });
                     }
 
@@ -1220,11 +1306,10 @@
                         _charts.tokenTrend = new Chart(tokenTrendCtx, {
                             type: 'line',
                             data: {
-                                labels: this.tokenTrendData.map(d => new Date(d.time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
                                 datasets: [
                                     {
                                         label: 'Input Tokens',
-                                        data: this.tokenTrendData.map(d => d.input_tokens),
+                                        data: this.tokenTrendData.map(d => ({ x: d.time, y: d.input_tokens })),
                                         borderColor: '#3b82f6',
                                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                         fill: true,
@@ -1232,7 +1317,7 @@
                                     },
                                     {
                                         label: 'Output Tokens',
-                                        data: this.tokenTrendData.map(d => d.output_tokens),
+                                        data: this.tokenTrendData.map(d => ({ x: d.time, y: d.output_tokens })),
                                         borderColor: '#10b981',
                                         backgroundColor: 'rgba(16, 185, 129, 0.1)',
                                         fill: true,
@@ -1245,7 +1330,48 @@
                                 maintainAspectRatio: false,
                                 interaction: { mode: 'index', intersect: false },
                                 plugins: { legend: { display: true, position: 'top' } },
-                                scales: { y: { beginAtZero: true } }
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { beginAtZero: true }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.keyModel) _charts.keyModel.destroy();
+                    const keyModelCtx = document.getElementById('chartKeyModel');
+                    if (keyModelCtx) {
+                        const seriesKeys = [...new Set(this.keyModelData.map(d => `${d.key_name} / ${d.model}`))];
+                        const datasets = seriesKeys.map((sk, i) => {
+                            const colorIdx = i % COLORS.length;
+                            return {
+                                label: sk,
+                                data: this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk).map(d => ({ x: d.time, y: d.count })),
+                                borderColor: COLORS[colorIdx],
+                                backgroundColor: BG_COLORS[colorIdx],
+                                fill: 'origin',
+                                tension: 0.4,
+                                pointRadius: 0
+                            };
+                        });
+                        _charts.keyModel = new Chart(keyModelCtx, {
+                            type: 'line',
+                            data: { datasets },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: {
+                                    legend: { display: true, position: 'top' },
+                                    tooltip: {
+                                        filter: (item) => item.raw.y > 0,
+                                        itemSort: (a, b) => b.raw.y - a.raw.y
+                                    }
+                                },
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { stacked: true, beginAtZero: true }
+                                }
                             }
                         });
                     }
@@ -1253,15 +1379,12 @@
                     if (_charts.modelTokens) _charts.modelTokens.destroy();
                     const modelTokensCtx = document.getElementById('chartModelTokens');
                     if (modelTokensCtx) {
-                        const timeLabels = [...new Set(this.modelTokenData.map(d => d.time))].sort();
                         const models = [...new Set(this.modelTokenData.map(d => d.model))];
                         const datasets = models.map((m, i) => {
                             const colorIdx = i % COLORS.length;
-                            const dataMap = {};
-                            this.modelTokenData.filter(d => d.model === m).forEach(d => { dataMap[d.time] = d.input_tokens + d.output_tokens; });
                             return {
                                 label: m,
-                                data: timeLabels.map(t => dataMap[t] || 0),
+                                data: this.modelTokenData.filter(d => d.model === m).map(d => ({ x: d.time, y: d.input_tokens + d.output_tokens })),
                                 borderColor: COLORS[colorIdx],
                                 backgroundColor: BG_COLORS[colorIdx],
                                 fill: 'origin',
@@ -1271,10 +1394,7 @@
                         });
                         _charts.modelTokens = new Chart(modelTokensCtx, {
                             type: 'line',
-                            data: {
-                                labels: timeLabels.map(t => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' })),
-                                datasets
-                            },
+                            data: { datasets },
                             options: {
                                 responsive: true,
                                 maintainAspectRatio: false,
@@ -1282,55 +1402,123 @@
                                 plugins: {
                                     legend: { display: true, position: 'top' },
                                     tooltip: {
-                                        filter: (item) => item.raw > 0,
-                                        itemSort: (a, b) => b.raw - a.raw
+                                        filter: (item) => item.raw.y > 0,
+                                        itemSort: (a, b) => b.raw.y - a.raw.y
                                     }
                                 },
-                                scales: { y: { stacked: true, beginAtZero: true } }
+                                scales: {
+                                    x: { type: 'time', time: { tooltipFormat: 'PPp' } },
+                                    y: { stacked: true, beginAtZero: true }
+                                }
                             }
                         });
                     }
 
-                    if (_charts.modelDist) _charts.modelDist.destroy();
-                    const modelDistCtx = document.getElementById('chartModelDist');
-                    if (modelDistCtx) {
-                        _charts.modelDist = new Chart(modelDistCtx, {
-                            type: 'doughnut',
+                    if (_charts.keyTokens) _charts.keyTokens.destroy();
+                    const keyTokensCtx = document.getElementById('chartKeyTokens');
+                    if (keyTokensCtx) {
+                        _charts.keyTokens = new Chart(keyTokensCtx, {
+                            type: 'bar',
                             data: {
-                                labels: this.modelData.map(d => d.model || 'Unknown'),
-                                datasets: [{
-                                    data: this.modelData.map(d => d.count),
-                                    backgroundColor: COLORS.slice(0, this.modelData.length)
-                                }]
+                                labels: this.keyTokenData.map(d => d.key_name || 'Unknown'),
+                                datasets: [
+                                    {
+                                        label: 'Input Tokens',
+                                        data: this.keyTokenData.map(d => d.input_tokens),
+                                        backgroundColor: '#3b82f6'
+                                    },
+                                    {
+                                        label: 'Output Tokens',
+                                        data: this.keyTokenData.map(d => d.output_tokens),
+                                        backgroundColor: '#10b981'
+                                    }
+                                ]
                             },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: true, position: 'top' } },
+                                scales: {
+                                    x: { stacked: true },
+                                    y: { stacked: true, beginAtZero: true }
+                                }
+                            }
                         });
                     }
 
-                    if (_charts.status) _charts.status.destroy();
-                    const statusCtx = document.getElementById('chartStatus');
-                    if (statusCtx) {
-                        _charts.status = new Chart(statusCtx, {
+                    if (_charts.accountLoad) _charts.accountLoad.destroy();
+                    const accountLoadCtx = document.getElementById('chartAccountLoad');
+                    if (accountLoadCtx) {
+                        _charts.accountLoad = new Chart(accountLoadCtx, {
                             type: 'doughnut',
                             data: {
-                                labels: this.statusData.map(d => d.label || 'Unknown'),
+                                labels: this.accountData.map(d => d.label || 'Unknown'),
                                 datasets: [{
-                                    data: this.statusData.map(d => d.count),
-                                    backgroundColor: this.statusData.map(d => {
-                                        const code = parseInt(d.label);
-                                        if (code >= 500) return '#ef4444';
-                                        if (code >= 400) return '#f59e0b';
-                                        return '#10b981';
-                                    })
+                                    data: this.accountData.map(d => d.count),
+                                    backgroundColor: COLORS.slice(0, this.accountData.length),
+                                    borderWidth: 2,
+                                    borderColor: '#fff'
                                 }]
                             },
-                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'right' } }
+                            }
+                        });
+                    }
+
+                    if (_charts.topModels) _charts.topModels.destroy();
+                    const topModelsCtx = document.getElementById('chartTopModels');
+                    if (topModelsCtx) {
+                        const sorted = [...this.modelStatsData].sort((a, b) => (b.input_tokens + b.output_tokens) - (a.input_tokens + a.output_tokens));
+                        _charts.topModels = new Chart(topModelsCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: sorted.map(d => d.model),
+                                datasets: [
+                                    {
+                                        label: 'Input Tokens',
+                                        data: sorted.map(d => d.input_tokens),
+                                        backgroundColor: '#3b82f6'
+                                    },
+                                    {
+                                        label: 'Output Tokens',
+                                        data: sorted.map(d => d.output_tokens),
+                                        backgroundColor: '#10b981'
+                                    }
+                                ]
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: true, position: 'top' } },
+                                scales: {
+                                    x: { stacked: true, beginAtZero: true },
+                                    y: { stacked: true }
+                                }
+                            }
                         });
                     }
                 },
                 setPeriod(p) {
                     this.period = p;
                     this.fetchAll();
+                },
+                setGrouping(g) {
+                    this.grouping = g;
+                    this.fetchAll();
+                },
+                getHeatmapCell(dayIndex, hour) {
+                    const cell = this.heatmapData.find(d => d.day_of_week === dayIndex && d.hour === hour);
+                    return cell ? cell.count : 0;
+                },
+                heatmapColor(count) {
+                    if (count === 0) return 'rgba(229, 231, 235, 0.5)';
+                    const max = Math.max(...this.heatmapData.map(d => d.count), 1);
+                    const intensity = Math.max(0.15, count / max);
+                    return `rgba(59, 130, 246, ${intensity})`;
                 }
             }
         }
@@ -1341,27 +1529,32 @@
                 total: 0,
                 page: 1,
                 limit: 50,
-                filters: { api_key_id: '', status_code: '' },
+                filters: { api_key_id: '', model: '' },
                 apiKeys: [],
+                models: [],
                 loading: false,
                 async init() {
                     this.$watch('$store.router.page', (val) => {
-                        if (val === 'requests') { this.fetchKeys(); this.fetchLog(); }
+                        if (val === 'requests') { this.fetchFilterOptions(); this.fetchLog(); }
                     });
                     if (Alpine.store('router').page === 'requests') {
-                        this.fetchKeys();
+                        this.fetchFilterOptions();
                         this.fetchLog();
                     }
                 },
-                async fetchKeys() {
-                    const res = await $api('/admin/keys');
-                    if (res && res.ok) this.apiKeys = await res.json();
+                async fetchFilterOptions() {
+                    const [keysRes, modelsRes] = await Promise.all([
+                        $api('/admin/keys'),
+                        $api('/admin/stats/distinct-models')
+                    ]);
+                    if (keysRes?.ok) this.apiKeys = await keysRes.json();
+                    if (modelsRes?.ok) this.models = await modelsRes.json();
                 },
                 async fetchLog() {
                     this.loading = true;
                     const params = new URLSearchParams({ page: this.page, limit: this.limit });
                     if (this.filters.api_key_id) params.append('api_key_id', this.filters.api_key_id);
-                    if (this.filters.status_code) params.append('status_code', this.filters.status_code);
+                    if (this.filters.model) params.append('model', this.filters.model);
                     try {
                         const res = await $api(`/admin/requests?${params}`);
                         if (res && res.ok) {

@@ -24,6 +24,7 @@ export interface StatsParams {
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
   api_key_id?: string
   account_id?: string
+  model?: string
 }
 
 export interface StatsRow {
@@ -32,12 +33,13 @@ export interface StatsRow {
 }
 
 export interface TimeSeriesParams {
-  interval: 'hour' | 'day'
+  interval: 'hour' | 'day' | 'week'
   from?: number
   to?: number
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
   api_key_id?: string
   account_id?: string
+  model?: string
 }
 
 export interface TimeSeriesRow {
@@ -51,6 +53,7 @@ export interface RequestLogParams {
   api_key_id?: string
   account_id?: string
   status_code?: number
+  model?: string
 }
 
 export interface RequestLogResult {
@@ -107,7 +110,18 @@ function resolveTimeRange(params: { from?: number; to?: number; period?: Period 
   return null
 }
 
-function buildWhereClause(range: { from: number; to: number } | null, filters: { api_key_id?: string; account_id?: string; status_code?: number }): string {
+function intervalFmt(interval: 'hour' | 'day' | 'week'): string {
+  switch (interval) {
+    case 'hour':
+      return `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
+    case 'day':
+      return `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
+    case 'week':
+      return `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime', 'weekday 0', '-6 days')`
+  }
+}
+
+function buildWhereClause(range: { from: number; to: number } | null, filters: { api_key_id?: string; account_id?: string; status_code?: number; model?: string }): string {
   const clauses: string[] = []
   if (range) {
     clauses.push(`r.created_at >= ${range.from}`)
@@ -116,6 +130,7 @@ function buildWhereClause(range: { from: number; to: number } | null, filters: {
   if (filters.api_key_id) clauses.push(`r.api_key_id = '${escSql(filters.api_key_id)}'`)
   if (filters.account_id) clauses.push(`r.account_id = '${escSql(filters.account_id)}'`)
   if (filters.status_code != null) clauses.push(`r.status_code = ${Number(filters.status_code)}`)
+  if (filters.model) clauses.push(`r.model = '${escSql(filters.model)}'`)
 
   return clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
 }
@@ -247,9 +262,7 @@ export async function getTimeSeries(params: TimeSeriesParams): Promise<TimeSerie
   const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
   const where = buildWhereClause(range, params)
 
-  const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
-    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
+  const fmt = intervalFmt(params.interval)
 
   const query = `
     SELECT
@@ -279,9 +292,7 @@ export async function getTokenTimeSeries(params: TimeSeriesParams): Promise<Toke
   const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
   const where = buildWhereClause(range, params)
 
-  const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
-    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
+  const fmt = intervalFmt(params.interval)
 
   const query = `
     SELECT
@@ -315,16 +326,13 @@ export interface ModelStatsParams {
   from?: number
   to?: number
   period?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_30_days'
+  api_key_id?: string
+  model?: string
 }
 
 export async function getModelStats(params: ModelStatsParams): Promise<ModelStatsRow[]> {
   const range = resolveTimeRange(params)
-  const rangeWhere: string[] = []
-  if (range) {
-    rangeWhere.push(`r.created_at >= ${range.from}`)
-    rangeWhere.push(`r.created_at <= ${range.to}`)
-  }
-  const where = rangeWhere.length > 0 ? `WHERE ${rangeWhere.join(' AND ')}` : ''
+  const where = buildWhereClause(range, params)
 
   const query = `
     SELECT
@@ -367,9 +375,7 @@ export async function getKeyModelTimeSeries(params: TimeSeriesParams): Promise<K
   const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
   const where = buildWhereClause(range, params)
 
-  const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
-    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
+  const fmt = intervalFmt(params.interval)
 
   const query = `
     SELECT
@@ -405,9 +411,7 @@ export async function getModelTokenTimeSeries(params: TimeSeriesParams): Promise
   const range = resolveTimeRange(params) ?? periodToRange('last_30_days')
   const where = buildWhereClause(range, params)
 
-  const fmt = params.interval === 'hour'
-    ? `strftime('%Y-%m-%dT%H:00:00', r.created_at, 'unixepoch', 'localtime')`
-    : `strftime('%Y-%m-%dT00:00:00', r.created_at, 'unixepoch', 'localtime')`
+  const fmt = intervalFmt(params.interval)
 
   const query = `
     SELECT
@@ -440,6 +444,7 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
     api_key_id: params.api_key_id,
     account_id: params.account_id,
     status_code: params.status_code,
+    model: params.model,
   })
 
   const countQuery = `SELECT COUNT(*) as total FROM requests r ${where}`
@@ -476,4 +481,87 @@ export async function getRequestLog(params: RequestLogParams): Promise<RequestLo
   }>(sql.raw(dataQuery))
 
   return { items, total, page }
+}
+
+export interface KeyTokenStatsRow {
+  key_name: string
+  input_tokens: number
+  output_tokens: number
+}
+
+export interface KeyTokenStatsParams {
+  from?: number
+  to?: number
+  period?: Period
+  api_key_id?: string
+  model?: string
+}
+
+export async function getKeyTokenStats(params: KeyTokenStatsParams): Promise<KeyTokenStatsRow[]> {
+  const range = resolveTimeRange(params)
+  const where = buildWhereClause(range, params)
+
+  const query = `
+    SELECT
+      COALESCE(k.name, r.api_key_id, 'unknown') as key_name,
+      SUM(COALESCE(r.input_tokens, 0)) as input_tokens,
+      SUM(COALESCE(r.output_tokens, 0)) as output_tokens
+    FROM requests r
+    LEFT JOIN api_keys k ON k.id = r.api_key_id
+    ${where}
+    GROUP BY r.api_key_id
+    ORDER BY (input_tokens + output_tokens) DESC
+  `
+
+  const rows = db.all<{ key_name: string; input_tokens: number; output_tokens: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    key_name: String(r.key_name ?? 'unknown'),
+    input_tokens: r.input_tokens ?? 0,
+    output_tokens: r.output_tokens ?? 0,
+  }))
+}
+
+export interface HeatmapRow {
+  day_of_week: number
+  hour: number
+  count: number
+}
+
+export interface HeatmapParams {
+  from?: number
+  to?: number
+  period?: Period
+  api_key_id?: string
+  model?: string
+}
+
+export async function getHourlyHeatmap(params: HeatmapParams): Promise<HeatmapRow[]> {
+  const range = resolveTimeRange(params)
+  const where = buildWhereClause(range, params)
+
+  const query = `
+    SELECT
+      CAST(strftime('%w', r.created_at, 'unixepoch', 'localtime') AS INTEGER) as day_of_week,
+      CAST(strftime('%H', r.created_at, 'unixepoch', 'localtime') AS INTEGER) as hour,
+      COUNT(*) as count
+    FROM requests r
+    ${where}
+    GROUP BY day_of_week, hour
+    ORDER BY day_of_week ASC, hour ASC
+  `
+
+  const rows = db.all<{ day_of_week: number; hour: number; count: number }>(sql.raw(query))
+
+  return rows.map(r => ({
+    day_of_week: r.day_of_week ?? 0,
+    hour: r.hour ?? 0,
+    count: r.count ?? 0,
+  }))
+}
+
+export async function getDistinctModels(): Promise<string[]> {
+  const query = `SELECT DISTINCT model FROM requests WHERE model IS NOT NULL ORDER BY model ASC`
+  const rows = db.all<{ model: string }>(sql.raw(query))
+  return rows.map(r => r.model)
 }

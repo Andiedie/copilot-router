@@ -4,9 +4,9 @@ import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatu
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
 import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
-import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries } from '../stats'
+import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap } from '../stats'
 import { getPoolStatus } from '../account/pool'
-import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams } from '../stats'
+import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams } from '../stats'
 
 const adminApp = new Hono()
 
@@ -194,6 +194,7 @@ adminApp.get('/stats', async (c) => {
     period: query.period as StatsParams['period'],
     api_key_id: query.api_key_id,
     account_id: query.account_id,
+    model: query.model,
   }
   const stats = await getStats(params)
   return c.json(stats)
@@ -208,6 +209,7 @@ adminApp.get('/stats/timeseries', async (c) => {
     period: query.period as TimeSeriesParams['period'],
     api_key_id: query.api_key_id,
     account_id: query.account_id,
+    model: query.model,
   }
   const series = await getTimeSeries(params)
   return c.json(series)
@@ -222,6 +224,7 @@ adminApp.get('/stats/token-timeseries', async (c) => {
     period: query.period as TimeSeriesParams['period'],
     api_key_id: query.api_key_id,
     account_id: query.account_id,
+    model: query.model,
   }
   const series = await getTokenTimeSeries(params)
   return c.json(series)
@@ -233,8 +236,15 @@ adminApp.get('/stats/models', async (c) => {
     from: query.from ? Number(query.from) : undefined,
     to: query.to ? Number(query.to) : undefined,
     period: query.period as ModelStatsParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
   }
   const models = await getModelStats(params)
+  return c.json(models)
+})
+
+adminApp.get('/stats/distinct-models', async (c) => {
+  const models = await getDistinctModels()
   return c.json(models)
 })
 
@@ -247,9 +257,36 @@ adminApp.get('/stats/key-model-timeseries', async (c) => {
     period: query.period as TimeSeriesParams['period'],
     api_key_id: query.api_key_id,
     account_id: query.account_id,
+    model: query.model,
   }
   const series = await getKeyModelTimeSeries(params)
   return c.json(series)
+})
+
+adminApp.get('/stats/key-tokens', async (c) => {
+  const query = c.req.query()
+  const params: KeyTokenStatsParams = {
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as KeyTokenStatsParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
+  }
+  const data = await getKeyTokenStats(params)
+  return c.json(data)
+})
+
+adminApp.get('/stats/heatmap', async (c) => {
+  const query = c.req.query()
+  const params: HeatmapParams = {
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as HeatmapParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
+  }
+  const data = await getHourlyHeatmap(params)
+  return c.json(data)
 })
 
 adminApp.get('/stats/model-token-timeseries', async (c) => {
@@ -261,6 +298,7 @@ adminApp.get('/stats/model-token-timeseries', async (c) => {
     period: query.period as TimeSeriesParams['period'],
     api_key_id: query.api_key_id,
     account_id: query.account_id,
+    model: query.model,
   }
   const series = await getModelTokenTimeSeries(params)
   return c.json(series)
@@ -274,6 +312,7 @@ adminApp.get('/requests', async (c) => {
     api_key_id: query.api_key_id,
     account_id: query.account_id,
     status_code: query.status_code ? Number(query.status_code) : undefined,
+    model: query.model,
   }
   const log = await getRequestLog(params)
   return c.json(log)
