@@ -1349,17 +1349,22 @@
                     const keyModelCtx = document.getElementById('chartKeyModel');
                     if (keyModelCtx) {
                         const seriesKeys = [...new Set(this.keyModelData.map(d => `${d.key_name} / ${d.model}`))];
-                        const datasets = seriesKeys.map((sk, i) => {
-                            const colorIdx = i % COLORS.length;
+                        const datasets = seriesKeys.map(sk => {
+                            const pts = this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk);
                             return {
                                 label: sk,
-                                data: this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk).map(d => ({ x: d.time, y: d.count })),
-                                borderColor: COLORS[colorIdx],
-                                backgroundColor: BG_COLORS[colorIdx],
+                                data: pts.map(d => ({ x: d.time, y: d.count })),
+                                _total: pts.reduce((s, d) => s + d.count, 0),
                                 fill: 'origin',
                                 tension: 0.4,
                                 pointRadius: 0
                             };
+                        }).sort((a, b) => a._total - b._total);
+                        datasets.forEach((ds, i) => {
+                            const colorIdx = i % COLORS.length;
+                            ds.borderColor = COLORS[colorIdx];
+                            ds.backgroundColor = BG_COLORS[colorIdx];
+                            delete ds._total;
                         });
                         _charts.keyModel = new Chart(keyModelCtx, {
                             type: 'line',
@@ -1372,7 +1377,8 @@
                                     legend: { display: true, position: 'top' },
                                     tooltip: {
                                         filter: (item) => item.raw.y > 0,
-                                        itemSort: (a, b) => b.raw.y - a.raw.y
+                                        itemSort: (a, b) => b.raw.y - a.raw.y,
+                                        callbacks: { footer: (items) => 'Total: ' + items.reduce((s, i) => s + i.raw.y, 0) }
                                     }
                                 },
                                 scales: {
@@ -1387,17 +1393,22 @@
                     const modelTokensCtx = document.getElementById('chartModelTokens');
                     if (modelTokensCtx) {
                         const models = [...new Set(this.modelTokenData.map(d => d.model))];
-                        const datasets = models.map((m, i) => {
-                            const colorIdx = i % COLORS.length;
+                        const datasets = models.map(m => {
+                            const pts = this.modelTokenData.filter(d => d.model === m);
                             return {
                                 label: m,
-                                data: this.modelTokenData.filter(d => d.model === m).map(d => ({ x: d.time, y: d.input_tokens + d.output_tokens })),
-                                borderColor: COLORS[colorIdx],
-                                backgroundColor: BG_COLORS[colorIdx],
+                                data: pts.map(d => ({ x: d.time, y: d.input_tokens + d.output_tokens })),
+                                _total: pts.reduce((s, d) => s + d.input_tokens + d.output_tokens, 0),
                                 fill: 'origin',
                                 tension: 0.4,
                                 pointRadius: 0
                             };
+                        }).sort((a, b) => a._total - b._total);
+                        datasets.forEach((ds, i) => {
+                            const colorIdx = i % COLORS.length;
+                            ds.borderColor = COLORS[colorIdx];
+                            ds.backgroundColor = BG_COLORS[colorIdx];
+                            delete ds._total;
                         });
                         _charts.modelTokens = new Chart(modelTokensCtx, {
                             type: 'line',
@@ -1410,7 +1421,8 @@
                                     legend: { display: true, position: 'top' },
                                     tooltip: {
                                         filter: (item) => item.raw.y > 0,
-                                        itemSort: (a, b) => b.raw.y - a.raw.y
+                                        itemSort: (a, b) => b.raw.y - a.raw.y,
+                                        callbacks: { footer: (items) => 'Total: ' + items.reduce((s, i) => s + i.raw.y, 0).toLocaleString() }
                                     }
                                 },
                                 scales: {
