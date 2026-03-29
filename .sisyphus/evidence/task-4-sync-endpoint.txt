@@ -1,0 +1,29 @@
+Task 4 Evidence: Pricing Sync Endpoint
+========================================
+Date: 2026-03-29
+
+=== Sync from OpenRouter (POST /admin/pricing/sync) ===
+Request: POST http://localhost:4141/admin/pricing/sync
+Authorization: Bearer test
+Response (200):
+{
+    "success": true,
+    "total_fetched": 345,
+    "synced": 8,
+    "new_matches": 0,
+    "unmatched_copilot_models": [
+        "Claude Sonnet 4",
+        "claude-sonnet-4-20250514",
+        "gpt-5.1-2025-11-13",
+        "gpt-5.4-mini-2026-03-17",
+        "gpt-5.40mini"
+    ]
+}
+
+Sync endpoint:
+- Fetched 345 models from OpenRouter API
+- Matched and synced 8 models to existing copilot model names
+- 0 new matches (all were already synced from a previous run)
+- Reported 5 unmatched copilot model names
+
+Sync endpoint verified ✓

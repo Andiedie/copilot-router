@@ -1,0 +1,14 @@
+=== GET /admin/stats/cost-overview ===
+{"today_cost":0.02211,"week_cost":0.02212665,"month_cost":0.02212665,"unpriced_model_count":5}
+
+=== GET /admin/stats/cost-timeseries?period=this_month&interval=day ===
+[{"time":"2026-03-27T00:00:00","input_cost":0,"output_cost":0,"total_cost":0},{"time":"2026-03-28T00:00:00","input_cost":0.00000525,"output_cost":0.0000114,"total_cost":0.00001665},{"time":"2026-03-29T00:00:00","input_cost":0.011123000000000001,"output_cost":0.010987,"total_cost":0.02211}]
+
+=== GET /admin/stats/cost-by-model?period=this_month ===
+[{"model":"claude-sonnet-4","input_cost":0.0060420000000000005,"output_cost":0.006105,"total_cost":0.012147,"request_count":4},{"model":"gpt-4o","input_cost":0.005,"output_cost":0.004,"total_cost":0.009000000000000001,"request_count":4},{"model":"gpt-5-mini","input_cost":0.000006,"output_cost":0.000822,"total_cost":0.000828,"request_count":6},{"model":"gpt-4o-mini","input_cost":0.000075,"output_cost":0.000059999999999999995,"total_cost":0.00013499999999999997,"request_count":7},{"model":"gpt-4o-mini-2024-07-18","input_cost":0.00000525,"output_cost":0.0000114,"total_cost":0.00001665,"request_count":4},{"model":"o4-mini","input_cost":0,"output_cost":0,"total_cost":0,"request_count":1},{"model":"o3-mini","input_cost":0,"output_cost":0,"total_cost":0,"request_count":1},{"model":"gpt-5.40mini","input_cost":0,"output_cost":0,"total_cost":0,"request_count":2},{"model":"gpt-5.4-mini-2026-03-17","input_cost":0,"output_cost":0,"total_cost":0,"request_count":1},{"model":"gpt-5.4-mini","input_cost":0,"output_cost":0,"total_cost":0,"request_count":1},{"model":"gpt-5.1-2025-11-13","input_cost":0,"output_cost":0,"total_cost":0,"request_count":2},{"model":"claude-sonnet-4-20250514","input_cost":0,"output_cost":0,"total_cost":0,"request_count":1},{"model":"Claude Sonnet 4","input_cost":0,"output_cost":0,"total_cost":0,"request_count":1},{"model":"unknown","input_cost":0,"output_cost":0,"total_cost":0,"request_count":22}]
+
+=== GET /admin/stats/cost-by-key?period=this_month ===
+[{"key_name":"test","total_cost":0.02212665}]
+
+=== GET /admin/stats/cache-savings?period=this_month&interval=day ===
+[{"time":"2026-03-27T00:00:00","savings":0,"cached_tokens":0},{"time":"2026-03-28T00:00:00","savings":0,"cached_tokens":0},{"time":"2026-03-29T00:00:00","savings":0.0060999999999999995,"cached_tokens":2200}]

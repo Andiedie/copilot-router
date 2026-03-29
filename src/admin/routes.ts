@@ -4,9 +4,10 @@ import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatu
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
 import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
-import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel } from '../stats'
+import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel, getCostOverview, getCostTimeSeries, getCostByModel, getCostByKey, getCacheSavings } from '../stats'
 import { getPoolStatus } from '../account/pool'
-import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams, CacheRateByModelParams } from '../stats'
+import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams, CacheRateByModelParams, CostModelParams } from '../stats'
+import { syncFromOpenRouter, listPricing, updatePricing, deletePricing, createManualPricing } from '../pricing'
 
 const adminApp = new Hono()
 
@@ -329,6 +330,132 @@ adminApp.get('/requests', async (c) => {
   }
   const log = await getRequestLog(params)
   return c.json(log)
+})
+
+// ─── Pricing ───
+
+adminApp.post('/pricing/sync', async (c) => {
+  const result = await syncFromOpenRouter()
+  if (!result.success) {
+    return c.json({ error: result.error }, 500)
+  }
+  return c.json(result)
+})
+
+adminApp.get('/pricing', async (c) => {
+  const result = await listPricing()
+  return c.json(result)
+})
+
+adminApp.post('/pricing', async (c) => {
+  const body = await c.req.json<{
+    copilot_model_name: string
+    prompt_price: string
+    completion_price: string
+    cache_read_price?: string
+  }>()
+  if (!body.copilot_model_name || !body.prompt_price || !body.completion_price) {
+    return c.json({ error: 'copilot_model_name, prompt_price, completion_price are required' }, 400)
+  }
+  const result = await createManualPricing(
+    body.copilot_model_name,
+    body.prompt_price,
+    body.completion_price,
+    body.cache_read_price,
+  )
+  if (!result.success) {
+    return c.json({ error: result.error }, 500)
+  }
+  return c.json(result.created, 201)
+})
+
+adminApp.put('/pricing/:id', async (c) => {
+  const id = c.req.param('id')
+  const body = await c.req.json<{
+    copilot_model_name?: string
+    openrouter_model_id?: string
+    prompt_price?: string
+    completion_price?: string
+    cache_read_price?: string
+    source?: string
+  }>()
+  const result = await updatePricing(id, body)
+  if (!result.success) {
+    if (result.error === 'Not found') return c.json({ error: 'Pricing entry not found' }, 404)
+    return c.json({ error: result.error }, 500)
+  }
+  return c.json(result.updated)
+})
+
+adminApp.delete('/pricing/:id', async (c) => {
+  const result = await deletePricing(c.req.param('id'))
+  if (!result.success) {
+    return c.json({ error: result.error }, 500)
+  }
+  return c.body(null, 204)
+})
+
+// ─── Cost Statistics ───
+
+adminApp.get('/stats/cost-overview', async (c) => {
+  const data = await getCostOverview()
+  return c.json(data)
+})
+
+adminApp.get('/stats/cost-timeseries', async (c) => {
+  const query = c.req.query()
+  const params: TimeSeriesParams = {
+    interval: (query.interval as TimeSeriesParams['interval']) ?? 'day',
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as TimeSeriesParams['period'],
+    api_key_id: query.api_key_id,
+    account_id: query.account_id,
+    model: query.model,
+  }
+  const data = await getCostTimeSeries(params)
+  return c.json(data)
+})
+
+adminApp.get('/stats/cost-by-model', async (c) => {
+  const query = c.req.query()
+  const params: CostModelParams = {
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as CostModelParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
+  }
+  const data = await getCostByModel(params)
+  return c.json(data)
+})
+
+adminApp.get('/stats/cost-by-key', async (c) => {
+  const query = c.req.query()
+  const params: KeyTokenStatsParams = {
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as KeyTokenStatsParams['period'],
+    api_key_id: query.api_key_id,
+    model: query.model,
+  }
+  const data = await getCostByKey(params)
+  return c.json(data)
+})
+
+adminApp.get('/stats/cache-savings', async (c) => {
+  const query = c.req.query()
+  const params: TimeSeriesParams = {
+    interval: (query.interval as TimeSeriesParams['interval']) ?? 'day',
+    from: query.from ? Number(query.from) : undefined,
+    to: query.to ? Number(query.to) : undefined,
+    period: query.period as TimeSeriesParams['period'],
+    api_key_id: query.api_key_id,
+    account_id: query.account_id,
+    model: query.model,
+  }
+  const data = await getCacheSavings(params)
+  return c.json(data)
 })
 
 // ─── System ───
