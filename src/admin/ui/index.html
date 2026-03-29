@@ -1349,12 +1349,13 @@
                     const keyModelCtx = document.getElementById('chartKeyModel');
                     if (keyModelCtx) {
                         const seriesKeys = [...new Set(this.keyModelData.map(d => `${d.key_name} / ${d.model}`))];
+                        const allTimes = [...new Set(this.keyModelData.map(d => d.time))].sort();
                         const datasets = seriesKeys.map(sk => {
-                            const pts = this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk);
+                            const ptMap = new Map(this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk).map(d => [d.time, d.count]));
                             return {
                                 label: sk,
-                                data: pts.map(d => ({ x: d.time, y: d.count })),
-                                _total: pts.reduce((s, d) => s + d.count, 0),
+                                data: allTimes.map(t => ({ x: t, y: ptMap.get(t) || 0 })),
+                                _total: [...ptMap.values()].reduce((s, v) => s + v, 0),
                                 fill: 'origin',
                                 tension: 0.4,
                                 pointRadius: 0
@@ -1393,12 +1394,13 @@
                     const modelTokensCtx = document.getElementById('chartModelTokens');
                     if (modelTokensCtx) {
                         const models = [...new Set(this.modelTokenData.map(d => d.model))];
+                        const allTokenTimes = [...new Set(this.modelTokenData.map(d => d.time))].sort();
                         const datasets = models.map(m => {
-                            const pts = this.modelTokenData.filter(d => d.model === m);
+                            const ptMap = new Map(this.modelTokenData.filter(d => d.model === m).map(d => [d.time, d.input_tokens + d.output_tokens]));
                             return {
                                 label: m,
-                                data: pts.map(d => ({ x: d.time, y: d.input_tokens + d.output_tokens })),
-                                _total: pts.reduce((s, d) => s + d.input_tokens + d.output_tokens, 0),
+                                data: allTokenTimes.map(t => ({ x: t, y: ptMap.get(t) || 0 })),
+                                _total: [...ptMap.values()].reduce((s, v) => s + v, 0),
                                 fill: 'origin',
                                 tension: 0.4,
                                 pointRadius: 0
