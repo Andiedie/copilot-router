@@ -1,12 +1,13 @@
 # src/proxy/
 
-Core request forwarding to `api.githubcopilot.com`. Three files: handler, header builder, fire-and-forget logger.
+Core request forwarding to `api.githubcopilot.com`. Handler, header builder, fire-and-forget logger, and debug test model.
 
 ## WHERE TO LOOK
 
 | Task | File |
 |------|------|
 | Modify forwarding logic | `index.ts` — `proxyHandler()` |
+| Test model (debug connection timeouts) | `test-model.ts` — `handleTestModel()` |
 | Add/remove passthrough headers | `headers.ts` — `PASSTHROUGH_HEADERS` array |
 | Change Copilot identity headers | `headers.ts` — `COPILOT_HEADERS` const |
 | Request/response body parsing | `body-parser.ts` |
@@ -15,6 +16,7 @@ Core request forwarding to `api.githubcopilot.com`. Three files: handler, header
 ## KEY BEHAVIORS
 
 **Path forwarding** (`index.ts`):
+- Body is read and model extracted BEFORE account selection — enables test model intercept without needing a valid account/JWT.
 - Path is forwarded as-is (no prefix stripping): `/v1/chat/completions` stays `/v1/chat/completions` upstream.
 - Both `/v1/*` and `/*` routes map to `proxyHandler`.
 
@@ -42,3 +44,11 @@ Core request forwarding to `api.githubcopilot.com`. Three files: handler, header
 - Do not add `transfer-encoding` or `connection` to upstream response — breaks streaming.
 - `@ts-ignore` on `duplex: "half"` is required for streaming request bodies — do not remove.
 - Never `await logRequest()` — intentionally non-blocking.
+
+**Test Model** (`test-model.ts`):
+- `isTestModel(model)` — regex match for `__test_model__[duration[_interval]__]`.
+- `parseTestModelConfig(model)` — extracts `durationSec` (default 300) and `intervalSec` (default 10) from model name.
+- `handleTestModel(c, model, isStream)` — returns mock OpenAI responses. Non-streaming sleeps then returns JSON; streaming sends SSE chunks at intervals via `ReadableStream`.
+- Logs every lifecycle event to console with `[test-model]` prefix: start, each chunk, client disconnect, completion.
+- Detects client abort via `c.req.raw.signal` — logged as disconnect.
+- Does NOT write to DB via `logRequest()` — console-only for real-time debugging.

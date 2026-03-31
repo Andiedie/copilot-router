@@ -84,3 +84,35 @@ bun run dev          # hot-reload dev server
 bun run db:generate  # generate migration after schema changes
 bun run db:migrate   # apply pending migrations
 ```
+
+## Debug Test Model
+
+A built-in test model `__test_model__` bypasses Copilot API forwarding entirely, returning mock responses with configurable delays. Useful for diagnosing connection timeout/reset issues across the proxy chain (Bun → reverse proxy → CDN → client).
+
+**Model name format:**
+
+| Model | Total Duration | Stream Interval |
+|-------|---------------|-----------------|
+| `__test_model__` | 300s (5min) | 10s |
+| `__test_model__30__` | 30s | 10s |
+| `__test_model__30_5__` | 30s | 5s |
+
+**Non-streaming** — waits for the full duration, then returns a single JSON response:
+
+```bash
+curl -v POST https://your-host/v1/chat/completions \
+  -H "Authorization: Bearer <api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"__test_model__30__","messages":[{"role":"user","content":"test"}]}'
+```
+
+**Streaming** — sends one SSE chunk per interval for the full duration:
+
+```bash
+curl -v -N POST https://your-host/v1/chat/completions \
+  -H "Authorization: Bearer <api-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"__test_model__300_30__","messages":[{"role":"user","content":"test"}],"stream":true}'
+```
+
+Server logs every lifecycle event (`[test-model]` prefix): request start, each chunk sent, client disconnect, completion. See [DEPLOYMENT.md](DEPLOYMENT.md) for known Cloudflare timeout behavior.

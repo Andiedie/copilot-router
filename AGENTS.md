@@ -29,6 +29,7 @@ copilot-router/
 | Task | Location |
 |------|----------|
 | Add a proxy feature / modify forwarding | `src/proxy/index.ts` |
+| Test model (debug connection timeouts) | `src/proxy/test-model.ts` — `handleTestModel()` |
 | Change which headers reach upstream | `src/proxy/headers.ts` — PASSTHROUGH_HEADERS list |
 | Account selection algorithm | `src/account/pool.ts` — `selectAccount()` |
 | JWT token refresh / caching | `src/account/token.ts` — in-memory Map, in-flight dedup |
@@ -43,7 +44,9 @@ copilot-router/
 
 | Symbol | File | Role |
 |--------|------|------|
-| `proxyHandler` | `src/proxy/index.ts` | Core request forwarder; passes path as-is (no `/v1` strip), selects account, gets JWT, calls upstream |
+| `proxyHandler` | `src/proxy/index.ts` | Core request forwarder; reads body and checks for test model first, then selects account, gets JWT, calls upstream |
+| `handleTestModel` | `src/proxy/test-model.ts` | Debug model handler; returns mock OpenAI responses with configurable delays; bypasses account selection and upstream entirely |
+| `isTestModel` | `src/proxy/test-model.ts` | Checks if model name matches `__test_model__[duration[_interval]__]` pattern |
 | `selectAccount` | `src/account/pool.ts` | Weighted round-robin; accounts within 80% of best quota are candidates |
 | `getToken` | `src/account/token.ts` | In-memory JWT cache with in-flight dedup to avoid parallel refresh races |
 | `exchangeToken` | `src/account/token.ts` | OAuth token → Copilot JWT via `/copilot_internal/v2/token` |
@@ -99,3 +102,4 @@ TEST_MODEL=gpt-5-mini         # Model used for account health tests
 - **Admin UI** at `/admin/` serves static HTML; client-side auth — the HTML shell has no server-side auth guard.
 - **`/admin/keys/:id/opencode-config`** endpoint generates ready-to-paste opencode provider config for a given API key.
 - **Token cache** is process-scoped (in-memory Map). On restart all tokens are re-fetched — no warm-up needed, just ~1 extra latency on first request per account.
+- **Cloudflare 524 timeout**: Non-streaming requests that take >100s to return the first byte will be terminated by Cloudflare (HTTP 524). Streaming requests are unaffected as long as data flows at least once per ~100s. See `DEPLOYMENT.md` for full diagnosis.
