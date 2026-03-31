@@ -12,6 +12,7 @@ import {
 } from "./body-parser"
 import { buildUpstreamHeaders } from "./headers"
 import { logRequest } from "./logger"
+import { handleTestModel, isTestModel } from "./test-model"
 
 export async function proxyHandler(c: Context) {
   const startTime = performance.now()
@@ -22,6 +23,20 @@ export async function proxyHandler(c: Context) {
 
   const apiKey = (c as any).get("apiKey") as { id: string } | undefined
   const originalUrl = new URL(c.req.url)
+
+  let bodyText: string | null = null
+  try {
+    bodyText = await c.req.raw.clone().text()
+  } catch {
+  }
+
+  const endpoint = originalUrl.pathname
+  const requestModel = bodyText ? extractModelFromBody(bodyText) : null
+
+  if (requestModel && isTestModel(requestModel)) {
+    const isStream = bodyText ? /"stream"\s*:\s*true/.test(bodyText) : false
+    return handleTestModel(c, requestModel, isStream)
+  }
 
   const account = await selectAccount(apiKey?.id)
   if (!account) {
@@ -52,15 +67,6 @@ export async function proxyHandler(c: Context) {
     }
     return c.json({ error: "Failed to get token for account" }, 502)
   }
-
-  let bodyText: string | null = null
-  try {
-    bodyText = await c.req.raw.clone().text()
-  } catch {
-  }
-
-  const endpoint = originalUrl.pathname
-  const requestModel = bodyText ? extractModelFromBody(bodyText) : null
 
   let requestBody: string | null = null
   if (bodyText && isStreamableEndpoint(endpoint)) {
