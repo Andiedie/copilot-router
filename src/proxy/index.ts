@@ -1,5 +1,5 @@
 import type { Context } from "hono"
-import { setAccountStatus } from "../account"
+import { setAccountStatus, updateAccountLastUsed } from "../account"
 import { selectAccount } from "../account/pool"
 import { clearTokenCache, getToken } from "../account/token"
 import { config } from "../config"
@@ -111,6 +111,8 @@ export async function proxyHandler(c: Context) {
       clearTokenCache(account.id)
       console.warn(`[proxy] Account ${account.github_login ?? account.id} quota exhausted — auto-disabled`)
     })()
+  } else {
+    void updateAccountLastUsed(account.id)
   }
 
   ;(c as any).set("proxyAccount", account)
