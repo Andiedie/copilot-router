@@ -49,6 +49,10 @@ export async function clearApiKeyBinding(id: string) {
   await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.id, id))
 }
 
+export async function setApiKeyBinding(id: string, accountId: string) {
+  await db.update(api_keys).set({ account_id: accountId }).where(eq(api_keys.id, id))
+}
+
 export async function validateApiKey(key: string) {
   const [record] = await db.select().from(api_keys).where(eq(api_keys.key, key))
   if (!record || record.status !== "active") return null

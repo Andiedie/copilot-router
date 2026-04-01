@@ -3,7 +3,7 @@ import { config } from '../config'
 import { listAccounts, getAccount, updateAccount, deleteAccount, setAccountStatus } from '../account'
 import { startDeviceFlow, pollDeviceFlow } from '../account/oauth'
 import { syncAccountQuota, syncAllQuotas, testAccount } from '../quota'
-import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding } from '../auth'
+import { createApiKey, deleteApiKey, listApiKeys, setApiKeyStatus, clearApiKeyBinding, setApiKeyBinding } from '../auth'
 import { getOverview, getStats, getTimeSeries, getRequestLog, getTokenTimeSeries, getModelStats, getKeyModelTimeSeries, getModelTokenTimeSeries, getDistinctModels, getKeyTokenStats, getHourlyHeatmap, getCacheRateByModel, getCacheRateByKey, getCostOverview, getCostTimeSeries, getCostByModel, getCostByKey, getCacheSavings } from '../stats'
 import { getPoolStatus } from '../account/pool'
 import type { StatsParams, TimeSeriesParams, RequestLogParams, ModelStatsParams, KeyTokenStatsParams, HeatmapParams, CacheRateByModelParams, CostModelParams } from '../stats'
@@ -127,11 +127,30 @@ adminApp.post('/keys', async (c) => {
 
 adminApp.patch('/keys/:id', async (c) => {
   const id = c.req.param('id')
-  const body = await c.req.json<{ status: 'active' | 'disabled' }>()
-  if (body.status !== 'active' && body.status !== 'disabled') {
-    return c.json({ error: 'status must be active or disabled' }, 400)
+  const body = await c.req.json<{ status?: 'active' | 'disabled'; account_id?: string | null }>()
+
+  if (body.account_id !== undefined) {
+    if (body.account_id === null) {
+      await clearApiKeyBinding(id)
+    } else {
+      const account = await getAccount(body.account_id)
+      if (!account) {
+        return c.json({ error: 'Account not found' }, 404)
+      }
+      await setApiKeyBinding(id, body.account_id)
+    }
+    if (body.status === undefined) {
+      return c.body(null, 204)
+    }
   }
-  await setApiKeyStatus(id, body.status)
+
+  if (body.status !== undefined) {
+    if (body.status !== 'active' && body.status !== 'disabled') {
+      return c.json({ error: 'status must be active or disabled' }, 400)
+    }
+    await setApiKeyStatus(id, body.status)
+  }
+
   return c.body(null, 204)
 })
 

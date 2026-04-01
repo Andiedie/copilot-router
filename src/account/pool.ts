@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { getActiveAccounts, getAccount } from './index'
 import { db } from '../db'
 import { api_keys } from '../db/schema'
@@ -44,8 +44,31 @@ export async function selectAccount(apiKeyId?: string) {
     return rem >= threshold
   })
 
-  const selected = candidates[rrCounter % candidates.length]
+  let selected = candidates[rrCounter % candidates.length]
   rrCounter++
+
+  // When binding a new key, prefer the account with the fewest existing bindings (spread strategy)
+  if (apiKeyId && candidates.length > 1) {
+    const bindingCounts = await db
+      .select({
+        account_id: api_keys.account_id,
+        count: sql<number>`count(*)`,
+      })
+      .from(api_keys)
+      .where(sql`${api_keys.account_id} is not null`)
+      .groupBy(api_keys.account_id)
+
+    const countMap = new Map<string, number>()
+    for (const row of bindingCounts) {
+      if (row.account_id) countMap.set(row.account_id, row.count)
+    }
+
+    // Sort candidates by binding count ascending — pick the least-bound account
+    const spreadSorted = [...candidates].sort((a, b) => {
+      return (countMap.get(a.id) ?? 0) - (countMap.get(b.id) ?? 0)
+    })
+    selected = spreadSorted[0]
+  }
 
   if (apiKeyId && selected) {
     await db.update(api_keys).set({ account_id: selected.id }).where(eq(api_keys.id, apiKeyId))
