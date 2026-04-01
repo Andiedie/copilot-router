@@ -35,6 +35,14 @@
             return res;
         }
 
+        // Format unix timestamp (seconds) to YYYY-MM-DD HH:mm:ss in local timezone
+        function formatTs(ts) {
+            if (!ts) return 'Never';
+            const d = new Date(ts * 1000);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
         document.addEventListener('alpine:init', () => {
             Alpine.store('auth', {
                 token: localStorage.getItem('cr_admin_token') || '',
@@ -335,7 +343,7 @@
                                         </template>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span x-text="account.last_used_at ? new Date(account.last_used_at * 1000).toISOString().replace('T', ' ').slice(0, 19) : 'Never'"></span>
+                                        <span x-text="formatTs(account.last_used_at)"></span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button 
@@ -475,7 +483,7 @@
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="key.total_requests.toLocaleString()"></td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span x-text="key.last_used_at ? new Date(key.last_used_at * 1000).toISOString().replace('T', ' ').slice(0, 19) : 'Never'"></span>
+                                        <span x-text="formatTs(key.last_used_at)"></span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button @click="exportConfig(key.id)" class="text-blue-600 hover:text-blue-900 mr-3">Export Config</button>
@@ -2245,7 +2253,7 @@
                         if (res?.ok) {
                             const data = await res.json();
                             Alpine.store('toasts').add(`Synced: ${data.synced} models matched`, 'success');
-                            this.lastSynced = new Date().toLocaleString();
+                            this.lastSynced = formatTs(Math.floor(Date.now() / 1000));
                             await this.fetchPricing();
                         } else {
                             Alpine.store('toasts').add('Sync failed', 'error');
@@ -2388,7 +2396,7 @@
                 applyFilters() { this.page = 1; this.fetchLog(); },
                 nextPage() { if (this.page * this.limit < this.total) { this.page++; this.fetchLog(); } },
                 prevPage() { if (this.page > 1) { this.page--; this.fetchLog(); } },
-                formatTime(ts) { return ts ? new Date(ts * 1000).toLocaleString() : '-'; },
+                formatTime(ts) { return formatTs(ts); },
                 statusColor(code) {
                     if (code >= 500) return 'bg-red-100 text-red-800';
                     if (code >= 400) return 'bg-yellow-100 text-yellow-800';
