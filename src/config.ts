@@ -9,7 +9,6 @@ export const config = {
   copilotApiBase:
     process.env.COPILOT_API_BASE ?? "https://api.githubcopilot.com",
   githubApiBase: process.env.GITHUB_API_BASE ?? "https://api.github.com",
-  tokenRefreshBuffer: Number(process.env.TOKEN_REFRESH_BUFFER ?? 0.8),
   testModel: process.env.TEST_MODEL ?? "gpt-5-mini",
 };
 

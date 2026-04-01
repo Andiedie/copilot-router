@@ -4,7 +4,7 @@ import { COPILOT_IDENTITY_HEADERS } from '../proxy/headers'
 
 interface CachedToken {
   token: string
-  expiresAt: number // unix timestamp (seconds)
+  refreshAfter: number // unix timestamp (seconds) — refresh once past this point
 }
 
 // In-memory JWT cache: account_id → cached token
@@ -12,6 +12,12 @@ const tokenCache = new Map<string, CachedToken>()
 
 // In-flight refresh dedup: account_id → Promise<string | null>
 const inflightRefresh = new Map<string, Promise<string | null>>()
+
+class TokenExchangeError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message)
+  }
+}
 
 export async function exchangeToken(oauth_token: string): Promise<{
   token: string
@@ -25,7 +31,7 @@ export async function exchangeToken(oauth_token: string): Promise<{
     },
   })
   if (!res.ok) {
-    throw new Error(`Token exchange failed: ${res.status}`)
+    throw new TokenExchangeError(res.status, `Token exchange failed: ${res.status}`)
   }
   const data = (await res.json()) as any
   return {
@@ -40,13 +46,24 @@ async function doRefresh(account_id: string): Promise<string | null> {
   if (!account || !account.oauth_token) return null
   try {
     const result = await exchangeToken(account.oauth_token)
+    const now = Date.now() / 1000
     tokenCache.set(account_id, {
       token: result.token,
-      expiresAt: result.expires_at,
+      refreshAfter: now + result.refresh_in,
     })
     return result.token
-  } catch {
-    await setAccountStatus(account_id, 'error')
+  } catch (err) {
+    const label = account.github_login ?? account_id
+    if (err instanceof TokenExchangeError) {
+      if (err.status === 401) {
+        await setAccountStatus(account_id, 'error')
+        console.warn(`[token] Account ${label} OAuth token invalid (HTTP ${err.status}) — marked as error`)
+      } else {
+        console.warn(`[token] Account ${label} token exchange failed (HTTP ${err.status})`)
+      }
+    } else {
+      console.warn(`[token] Account ${label} token exchange failed:`, err)
+    }
     tokenCache.delete(account_id)
     return null
   } finally {
@@ -58,7 +75,7 @@ export async function getToken(account_id: string): Promise<string | null> {
   const cached = tokenCache.get(account_id)
   const now = Date.now() / 1000
 
-  if (cached && now < cached.expiresAt * config.tokenRefreshBuffer) {
+  if (cached && now < cached.refreshAfter) {
     return cached.token
   }
 
