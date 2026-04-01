@@ -335,7 +335,7 @@
                                         </template>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span x-text="account.last_used_at ? new Date(account.last_used_at).toLocaleString() : 'Never'"></span>
+                                        <span x-text="account.last_used_at ? new Date(account.last_used_at * 1000).toISOString().replace('T', ' ').slice(0, 19) : 'Never'"></span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button 
@@ -454,15 +454,18 @@
                                         <button @click="navigator.clipboard.writeText(key.key); Alpine.store('toasts').add('Copied!', 'success')" class="ml-2 text-xs text-blue-600 hover:text-blue-800">Copy</button>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <template x-if="key.account_id">
-                                            <span class="inline-flex items-center gap-1">
-                                                <span x-text="accountName(key.account_id)"></span>
-                                                <button @click="clearBinding(key.id)" class="text-xs text-gray-400 hover:text-red-600" title="Clear binding">✕</button>
-                                            </span>
-                                        </template>
-                                        <template x-if="!key.account_id">
-                                            <span class="text-gray-400">—</span>
-                                        </template>
+                                        <div class="inline-flex items-center gap-1">
+                                            <select
+                                                :value="key.account_id || ''"
+                                                @change="changeBinding(key.id, $event.target.value)"
+                                                class="text-sm border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-[180px]"
+                                            >
+                                                <option value="">— None —</option>
+                                                <template x-for="acct in accounts" :key="acct.id">
+                                                    <option :value="acct.id" :selected="acct.id === key.account_id" x-text="acct.name + (acct.status !== 'active' ? ' (' + acct.status + ')' : '')"></option>
+                                                </template>
+                                            </select>
+                                        </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
@@ -472,7 +475,7 @@
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" x-text="key.total_requests.toLocaleString()"></td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span x-text="key.last_used_at ? new Date(key.last_used_at).toLocaleString() : 'Never'"></span>
+                                        <span x-text="key.last_used_at ? new Date(key.last_used_at * 1000).toISOString().replace('T', ' ').slice(0, 19) : 'Never'"></span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button @click="exportConfig(key.id)" class="text-blue-600 hover:text-blue-900 mr-3">Export Config</button>
@@ -623,9 +626,21 @@
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key × Model Requests</h3>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Requests</h3>
                         <div class="h-80">
                             <canvas id="chartKeyModel"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">API Key Call Distribution</h3>
+                        <div class="h-64">
+                            <canvas id="chartApiKeyDist"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Model Call Distribution</h3>
+                        <div class="h-64">
+                            <canvas id="chartModelDist"></canvas>
                         </div>
                     </div>
                     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -1451,6 +1466,21 @@
                     } catch (err) {
                         console.error('Failed to clear binding', err);
                     }
+                },
+                async changeBinding(keyId, accountId) {
+                    try {
+                        const res = await $api(`/admin/keys/${keyId}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ account_id: accountId || null }),
+                        });
+                        if (res && res.ok) {
+                            Alpine.store('toasts').add(accountId ? 'Account binding updated' : 'Binding cleared', 'success');
+                            this.fetchAll();
+                        }
+                    } catch (err) {
+                        console.error('Failed to change binding', err);
+                        Alpine.store('toasts').add('Failed to update binding', 'error');
+                    }
                 }
             }
         }
@@ -1640,12 +1670,18 @@
                     if (_charts.keyModel) _charts.keyModel.destroy();
                     const keyModelCtx = document.getElementById('chartKeyModel');
                     if (keyModelCtx) {
-                        const seriesKeys = [...new Set(this.keyModelData.map(d => `${d.key_name} / ${d.model}`))];
+                        // Aggregate by model only (ignore api key dimension)
+                        const modelTotalsMap = new Map();
+                        for (const d of this.keyModelData) {
+                            const key = `${d.model}__${d.time}`;
+                            modelTotalsMap.set(key, (modelTotalsMap.get(key) || 0) + d.count);
+                        }
+                        const seriesKeys = [...new Set(this.keyModelData.map(d => d.model))];
                         const allTimes = [...new Set(this.keyModelData.map(d => d.time))].sort();
-                        const datasets = seriesKeys.map(sk => {
-                            const ptMap = new Map(this.keyModelData.filter(d => `${d.key_name} / ${d.model}` === sk).map(d => [d.time, d.count]));
+                        const datasets = seriesKeys.map(model => {
+                            const ptMap = new Map(allTimes.map(t => [t, modelTotalsMap.get(`${model}__${t}`) || 0]));
                             return {
-                                label: sk,
+                                label: model,
                                 data: allTimes.map(t => ({ x: t, y: ptMap.get(t) || 0 })),
                                 _total: [...ptMap.values()].reduce((s, v) => s + v, 0),
                                 fill: 'origin',
@@ -1754,6 +1790,63 @@
                                 scales: {
                                     x: { stacked: true },
                                     y: { stacked: true, beginAtZero: true }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.apiKeyDist) _charts.apiKeyDist.destroy();
+                    const apiKeyDistCtx = document.getElementById('chartApiKeyDist');
+                    if (apiKeyDistCtx) {
+                        const keyTotals = new Map();
+                        for (const d of this.keyModelData) {
+                            keyTotals.set(d.key_name, (keyTotals.get(d.key_name) || 0) + d.count);
+                        }
+                        const keyLabels = [...keyTotals.keys()];
+                        const keyCounts = keyLabels.map(k => keyTotals.get(k));
+                        _charts.apiKeyDist = new Chart(apiKeyDistCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: keyLabels,
+                                datasets: [{
+                                    data: keyCounts,
+                                    backgroundColor: COLORS.slice(0, keyLabels.length),
+                                    borderWidth: 2,
+                                    borderColor: '#fff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'right' },
+                                    tooltip: { callbacks: { label: (item) => `${item.label}: ${item.raw.toLocaleString()}` } }
+                                }
+                            }
+                        });
+                    }
+
+                    if (_charts.modelDist) _charts.modelDist.destroy();
+                    const modelDistCtx = document.getElementById('chartModelDist');
+                    if (modelDistCtx) {
+                        const sortedModels = [...this.modelStatsData].sort((a, b) => b.count - a.count);
+                        _charts.modelDist = new Chart(modelDistCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: sortedModels.map(d => d.model),
+                                datasets: [{
+                                    data: sortedModels.map(d => d.count),
+                                    backgroundColor: COLORS.slice(0, sortedModels.length),
+                                    borderWidth: 2,
+                                    borderColor: '#fff'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { position: 'right' },
+                                    tooltip: { callbacks: { label: (item) => `${item.label}: ${item.raw.toLocaleString()}` } }
                                 }
                             }
                         });
