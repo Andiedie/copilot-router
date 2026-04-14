@@ -15,13 +15,9 @@ export async function selectAccount(apiKeyId?: string) {
     if (keyRow?.account_id) {
       const account = await getAccount(keyRow.account_id)
       if (account && account.status === 'active') {
-        const isUnlimited = account.quota_limit === 0 || account.quota_limit === -1
-        const hasQuota = isUnlimited || (account.quota_limit - account.quota_used) > 0
-        if (hasQuota) {
-          return account
-        }
+        return account
       }
-      // Stale binding — clear it, fall through to normal selection
+      // Stale binding (account disabled/error/deleted) — clear it, fall through to normal selection
       await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.id, apiKeyId))
     }
   }

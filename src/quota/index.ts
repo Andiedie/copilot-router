@@ -1,7 +1,4 @@
-import { eq } from 'drizzle-orm'
 import { config } from '../config'
-import { db } from '../db'
-import { api_keys } from '../db/schema'
 import { getAccount, getActiveAccounts, updateAccountQuota } from '../account'
 import { getToken } from '../account/token'
 import { COPILOT_IDENTITY_HEADERS } from '../proxy/headers'
@@ -49,10 +46,6 @@ export async function syncAccountQuota(
       quota_limit,
       quota_used,
     })
-
-    if (quota_limit > 0 && quota_used >= quota_limit) {
-      await db.update(api_keys).set({ account_id: null }).where(eq(api_keys.account_id, account_id))
-    }
 
     return { success: true, quota_limit, quota_used, remaining: remaining as number }
   } catch (err: any) {
