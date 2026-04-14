@@ -25,26 +25,10 @@ export async function selectAccount(apiKeyId?: string) {
   const active = await getActiveAccounts()
   if (active.length === 0) return null
 
-  // quota_limit=0 means unlimited (treated as 9999); sort descending by remaining
-  const sorted = [...active].sort((a, b) => {
-    const remA = a.quota_limit > 0 ? (a.quota_limit - a.quota_used) : 9999
-    const remB = b.quota_limit > 0 ? (b.quota_limit - b.quota_used) : 9999
-    return remB - remA
-  })
-
-  // Candidates within 80% of best remaining quota get round-robin selection
-  const best = sorted[0].quota_limit > 0 ? (sorted[0].quota_limit - sorted[0].quota_used) : 9999
-  const threshold = best * 0.8
-  const candidates = sorted.filter(a => {
-    const rem = a.quota_limit > 0 ? (a.quota_limit - a.quota_used) : 9999
-    return rem >= threshold
-  })
-
-  let selected = candidates[rrCounter % candidates.length]
+  let selected = active[rrCounter % active.length]
   rrCounter++
 
-  // When binding a new key, prefer the account with the fewest existing bindings (spread strategy)
-  if (apiKeyId && candidates.length > 1) {
+  if (apiKeyId && active.length > 1) {
     const bindingCounts = await db
       .select({
         account_id: api_keys.account_id,
@@ -59,11 +43,7 @@ export async function selectAccount(apiKeyId?: string) {
       if (row.account_id) countMap.set(row.account_id, row.count)
     }
 
-    // Sort candidates by binding count ascending — pick the least-bound account
-    const spreadSorted = [...candidates].sort((a, b) => {
-      return (countMap.get(a.id) ?? 0) - (countMap.get(b.id) ?? 0)
-    })
-    selected = spreadSorted[0]
+    selected = [...active].sort((a, b) => (countMap.get(a.id) ?? 0) - (countMap.get(b.id) ?? 0))[0]
   }
 
   if (apiKeyId && selected) {
